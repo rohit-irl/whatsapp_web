@@ -83,7 +83,7 @@ const Chat = () => {
     (a, b) => new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt)
   );
 
-  if (!localStorage.getItem("chat_user") && !localStorage.getItem("chat_username")) {
+  if (!localStorage.getItem("chat_user")) {
     return <Navigate to="/" replace />;
   }
 

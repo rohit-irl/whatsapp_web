@@ -10,7 +10,6 @@ const Sidebar = ({ currentUser, selectedUser, onSelectUser }) => {
 
   const handleLogout = () => {
     localStorage.removeItem("chat_user");
-    localStorage.removeItem("chat_username");
     navigate("/");
   };
 
@@ -93,8 +92,8 @@ const Sidebar = ({ currentUser, selectedUser, onSelectUser }) => {
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-600 shadow-sm">
                 {user.username?.[0]?.toUpperCase()}
               </div>
-              <div className="flex-1 border-b border-gray-100 pb-4 pt-3 text-left">
-                <p className="text-base font-medium text-gray-800">{user.username}</p>
+              <div className="flex flex-1 items-center overflow-hidden border-b border-gray-100 pb-4 pt-3 text-left">
+                <p className="truncate text-base font-medium text-gray-800">{user.username}</p>
               </div>
             </button>
           );

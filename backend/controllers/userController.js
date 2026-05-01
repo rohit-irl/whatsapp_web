@@ -27,7 +27,7 @@ export const createUser = async (req, res, next) => {
 
 export const getUsers = async (_req, res, next) => {
   try {
-    const users = await User.find().sort({ username: 1 });
+    const users = await User.find({}, { password: 0 }).sort({ username: 1 });
     return res.status(200).json(users);
   } catch (error) {
     return next(error);

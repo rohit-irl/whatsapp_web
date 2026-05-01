@@ -4,5 +4,12 @@ export const notFound = (_req, res) => {
 
 export const errorHandler = (err, _req, res, _next) => {
   const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
-  res.status(statusCode).json({ message: err.message || "Internal Server Error" });
+  
+  // Mask ugly MongoDB / OpenSSL internal errors
+  let message = err.message || "Internal Server Error";
+  if (message.includes("SSL routines") || message.includes("tlsv1 alert") || message.includes("MongoNetworkError")) {
+    message = "Database connection error. Please verify your connection or restart the server.";
+  }
+  
+  res.status(statusCode).json({ message });
 };

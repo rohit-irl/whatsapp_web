@@ -5,6 +5,7 @@ import http from "http";
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
+import authRoutes from "./routes/authRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import configureSocket from "./socket/socket.js";
@@ -54,6 +55,7 @@ app.get("/", (_req, res) => {
 
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/auth", authRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

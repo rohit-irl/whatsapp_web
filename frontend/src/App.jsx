@@ -1,12 +1,12 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 
 const ProtectedRoute = ({ children }) => {
   const storedUser = localStorage.getItem("chat_user");
-  const storedUsername = localStorage.getItem("chat_username");
 
-  if (!storedUser && !storedUsername) {
+  if (!storedUser) {
     return <Navigate to="/" replace />;
   }
 
@@ -17,6 +17,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route
         path="/chat"
         element={

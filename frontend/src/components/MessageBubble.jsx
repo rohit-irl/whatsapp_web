@@ -16,7 +16,7 @@ const MessageBubble = ({ message, isOwnMessage }) => {
         }`}
       >
         <div className="flex flex-col">
-          <span className="pr-12 text-[14.2px] leading-relaxed">{message.text}</span>
+          <span className="pr-12 text-[14.2px] leading-relaxed break-words whitespace-pre-wrap">{message.text}</span>
           <span className="absolute bottom-1 right-2 text-[10px] text-gray-500">
             {formattedTime}
           </span>

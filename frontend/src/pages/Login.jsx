@@ -3,41 +3,87 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 
 const Login = () => {
-  const [username, setUsername] = useState("");
-  const [error, setError] = useState("");
+  const [formData, setFormData] = useState({
+    username: "",
+    password: "",
+  });
+  const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    setIsMounted(true);
-    if (localStorage.getItem("chat_user") || localStorage.getItem("chat_username")) {
+    if (localStorage.getItem("chat_user")) {
       navigate("/chat", { replace: true });
     }
   }, [navigate]);
 
+  const validate = () => {
+    const nextErrors = {};
+
+    if (!formData.username.trim()) {
+      nextErrors.username = "Username is required";
+    }
+
+    if (!formData.password) {
+      nextErrors.password = "Password is required";
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const trimmedUsername = username.trim();
-
-    if (!trimmedUsername) {
-      setError("Username is required");
+    if (!validate()) {
       return;
     }
 
     try {
       setIsSubmitting(true);
-      setError("");
+      setErrors({});
 
-      const { data } = await api.post("/users", { username: trimmedUsername });
-      localStorage.setItem("chat_username", trimmedUsername);
-      localStorage.setItem("chat_user", JSON.stringify(data));
+      const payload = {
+        username: formData.username.trim(),
+        password: formData.password,
+      };
+
+      const { data } = await api.post("/auth/login", payload);
+      const userData = data?.user || data;
+
+      if (!userData?._id || !userData?.username) {
+        setErrors({ form: "Invalid credentials" });
+        return;
+      }
+
+      localStorage.setItem(
+        "chat_user",
+        JSON.stringify({ _id: userData._id, username: userData.username })
+      );
       navigate("/chat");
     } catch (requestError) {
-      setError(requestError.response?.data?.message || "Unable to login. Please try again.");
+      const status = requestError?.response?.status;
+      if (!requestError.response) {
+        setErrors({ form: "Cannot connect to server. Please check if the backend is running." });
+      } else if (status === 401 || status === 400) {
+        setErrors({ form: "Invalid credentials" });
+      } else {
+        setErrors({ form: requestError.response?.data?.message || "Unable to login. Please try again." });
+      }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const isButtonDisabled = isSubmitting || !formData.username.trim() || !formData.password;
+  const goToSignup = () => {
+    navigate("/signup");
+    // Hard fallback for stale router/runtime edge cases.
+    setTimeout(() => {
+      if (window.location.pathname !== "/signup") {
+        window.location.assign("/signup");
+      }
+    }, 50);
   };
 
   return (
@@ -112,9 +158,7 @@ const Login = () => {
         
         {/* Background Text (Added back and made prominent) */}
         <div 
-          className={`mb-16 md:mb-20 md:-mt-10 text-center transition-all duration-1000 ease-out ${
-            isMounted ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
-          }`}
+          className="mb-16 text-center transition-all duration-1000 ease-out md:mb-20 md:-mt-10"
         >
           <h1 className="mb-4 text-4xl md:text-6xl font-extrabold tracking-tight text-white drop-shadow-xl">
             Chat Smarter.<br className="md:hidden" /> Connect Faster.
@@ -126,9 +170,7 @@ const Login = () => {
 
         {/* Card Wrapper for Entrance Animation */}
         <div
-          className={`w-full max-w-md transform transition-all duration-1000 delay-150 ease-out ${
-            isMounted ? "scale-100 opacity-100" : "scale-95 opacity-0"
-          }`}
+          className="w-full max-w-md transform transition-all duration-1000 delay-150 ease-out"
         >
           {/* Static Card */}
           <div className="rounded-3xl border border-white/40 bg-white/80 p-8 shadow-2xl backdrop-blur-xl">
@@ -140,7 +182,7 @@ const Login = () => {
                 </svg>
               </div>
               <h2 className="mb-2 text-2xl font-extrabold text-gray-800">Welcome to WhatsApp</h2>
-              <p className="text-sm font-medium text-gray-500">Enter your username to start chatting</p>
+              <p className="text-sm font-medium text-gray-500">Login to continue chatting securely</p>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -153,26 +195,69 @@ const Login = () => {
                 </div>
                 <input
                   type="text"
-                  value={username}
+                  value={formData.username}
                   onChange={(event) => {
-                    setUsername(event.target.value);
-                    if (error) setError("");
+                    setFormData((previous) => ({ ...previous, username: event.target.value }));
+                    if (errors.username || errors.form) {
+                      setErrors((previous) => ({ ...previous, username: "", form: "" }));
+                    }
                   }}
                   autoFocus
                   placeholder="Username"
-                  className="relative w-full rounded-full border border-gray-200 bg-white/60 py-3 pl-12 pr-5 text-gray-800 shadow-sm outline-none backdrop-blur-md transition-all duration-300 placeholder:text-gray-400 focus:border-[#25D366] focus:bg-white focus:ring-4 focus:ring-[#25D366]/20"
+                  className={`relative w-full rounded-full border bg-white/60 py-3 pl-12 pr-5 text-gray-800 shadow-sm outline-none backdrop-blur-md transition-all duration-300 placeholder:text-gray-400 focus:bg-white focus:ring-4 ${
+                    errors.username
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
+                      : "border-gray-200 focus:border-[#25D366] focus:ring-[#25D366]/20"
+                  }`}
                 />
+                {errors.username ? (
+                  <p className="mt-2 pl-4 text-sm font-medium text-red-500">{errors.username}</p>
+                ) : null}
+              </div>
+
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-4 text-gray-400">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c1.66 0 3-1.34 3-3S13.66 5 12 5s-3 1.34-3 3 1.34 3 3 3zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                </div>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(event) => {
+                    setFormData((previous) => ({ ...previous, password: event.target.value }));
+                    if (errors.password || errors.form) {
+                      setErrors((previous) => ({ ...previous, password: "", form: "" }));
+                    }
+                  }}
+                  placeholder="Password"
+                  className={`relative w-full rounded-full border bg-white/60 py-3 pl-12 pr-14 text-gray-800 shadow-sm outline-none backdrop-blur-md transition-all duration-300 placeholder:text-gray-400 focus:bg-white focus:ring-4 ${
+                    errors.password
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
+                      : "border-gray-200 focus:border-[#25D366] focus:ring-[#25D366]/20"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute inset-y-0 right-4 text-sm font-semibold text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+                {errors.password ? (
+                  <p className="mt-2 pl-4 text-sm font-medium text-red-500">{errors.password}</p>
+                ) : null}
               </div>
               
-              {error && (
+              {errors.form && (
                 <p className="animate-pulse pl-4 text-sm font-medium text-red-500">
-                  {error}
+                  {errors.form}
                 </p>
               )}
 
               <button
                 type="submit"
-                disabled={!username.trim() || isSubmitting}
+                disabled={isButtonDisabled}
                 className="group relative mt-2 flex w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#25D366] to-[#128C7E] px-5 py-3 font-bold text-white shadow-lg shadow-green-500/30 transition-all duration-300 hover:scale-[1.02] hover:shadow-green-500/50 active:scale-95 disabled:scale-100 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none"
               >
                 {isSubmitting ? (
@@ -191,6 +276,17 @@ const Login = () => {
                 {/* Ripple effect overlay on hover */}
                 <div className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
               </button>
+
+              <p className="pt-1 text-center text-sm text-gray-600">
+                Don't have an account?{" "}
+                <button
+                  type="button"
+                  onClick={goToSignup}
+                  className="cursor-pointer font-semibold text-[#128C7E] hover:underline"
+                >
+                  Sign up
+                </button>
+              </p>
             </form>
           </div>
         </div>
