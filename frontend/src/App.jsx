@@ -14,6 +14,11 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
+  // Restore persisted theme on every render/refresh
+  const savedTheme = localStorage.getItem("wa_theme");
+  if (savedTheme === "Dark") document.documentElement.classList.add("dark");
+  else document.documentElement.classList.remove("dark");
+
   return (
     <Routes>
       <Route path="/" element={<Login />} />
