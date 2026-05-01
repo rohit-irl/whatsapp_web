@@ -3,7 +3,7 @@ import { SocketContext } from "../context/SocketContext";
 
 const useSocket = () => {
   const context = useContext(SocketContext);
-  return context?.socket ?? null;
+  return context?.socket || null;
 };
 
 export default useSocket;

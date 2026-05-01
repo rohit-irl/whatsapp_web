@@ -14,10 +14,22 @@ connectDB();
 
 const app = express();
 const server = http.createServer(app);
+const clientUrl = process.env.CLIENT_URL;
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (origin === clientUrl) return true;
+  return /^http:\/\/localhost:51\d{2}$/.test(origin);
+};
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST"],
   },
 });
@@ -26,7 +38,12 @@ configureSocket(io);
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL,
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
   })
 );
 app.use(express.json());
