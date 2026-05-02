@@ -154,14 +154,21 @@ export const getLastSeen = (contactId) => {
 //  Returns: "online" if isOnline, else "last seen today at 3:45 PM",
 //           "last seen yesterday at 11:22 AM", "last seen 28/04/25"
 // ─────────────────────────────────────────────────────────
-export const formatLastSeen = (contactId, isOnline) => {
+/** serverLastSeen: ISO string or Date from API (per-user). Falls back to localStorage only if missing. */
+export const formatLastSeen = (contactId, isOnline, serverLastSeen) => {
   if (isOnline) return "online";
-  const raw = getLastSeen(contactId);
+  const raw =
+    serverLastSeen != null
+      ? typeof serverLastSeen === "string"
+        ? serverLastSeen
+        : new Date(serverLastSeen).toISOString()
+      : getLastSeen(contactId);
   if (!raw) return "last seen recently";
   const date = new Date(raw);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
   const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
   if (date >= today) return `last seen today at ${time}`;
   if (date >= yesterday) return `last seen yesterday at ${time}`;
@@ -169,6 +176,16 @@ export const formatLastSeen = (contactId, isOnline) => {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const yy = String(date.getFullYear()).slice(-2);
   return `last seen ${dd}/${mm}/${yy}`;
+};
+
+export const formatStatusTime = (rawDate) => {
+  if (!rawDate) return "";
+  const d = new Date(rawDate);
+  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (sec < 60) return "just now";
+  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)} hours ago`;
+  return `${Math.floor(sec / 86400)} days ago`;
 };
 
 // ─────────────────────────────────────────────────────────
@@ -179,7 +196,7 @@ export const loadProfile = () => {
 };
 
 export const saveProfile = (profile) => {
-  try { localStorage.setItem(LS_PROFILE_KEY, JSON.stringify(profile)); } catch {}
+  try { localStorage.setItem(LS_PROFILE_KEY, JSON.stringify(profile)); } catch (e) { console.warn("Quota Exceeded for profile"); }
 };
 
 // ─────────────────────────────────────────────────────────

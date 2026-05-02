@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../../api/axios";
 import { loadProfile, saveLastSeen, saveProfile } from "../../utils/mockData";
 
 // ── iOS-style Toggle (pure CSS, no package) ───────────────
@@ -69,9 +70,15 @@ const CATS = [
 // ── RightPanel ────────────────────────────────────────────
 const RightPanel = ({ cat, currentUser, onProfileSave }) => {
   const saved = loadProfile();
-  const [name,    setName]    = useState(saved?.name    || currentUser?.username || "User");
-  const [about,   setAbout]   = useState(saved?.about   || "Hey there! I am using WhatsApp.");
-  const [photo,   setPhoto]   = useState(saved?.photoBase64 || null);
+  const [name, setName] = useState(
+    () => currentUser?.username || saved?.name || "User"
+  );
+  const [about, setAbout] = useState(
+    () => currentUser?.about ?? saved?.about ?? "Hey there! I am using WhatsApp."
+  );
+  const [photo, setPhoto] = useState(
+    () => currentUser?.avatar || saved?.photoBase64 || null
+  );
   const [editName, setEditName]= useState(false);
   const [savedOk,  setSavedOk] = useState(false);
   const [lastSeen, setLastSeen]= useState("Everyone");
@@ -97,14 +104,58 @@ const RightPanel = ({ cat, currentUser, onProfileSave }) => {
   const handlePhotoChange = (e) => {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => setPhoto(ev.target.result);
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_SIZE = 256;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } }
+        else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        setPhoto(canvas.toDataURL("image/jpeg", 0.85)); // 85% quality JPEG is very small
+      };
+      img.src = ev.target.result;
+    };
     reader.readAsDataURL(file); e.target.value = "";
   };
-  const handleSave = () => {
+  const handleSave = async () => {
     const p = { name, about, photoBase64: photo };
-    saveProfile(p); onProfileSave?.(p);
-    try { const u = JSON.parse(localStorage.getItem("chat_user")||"{}"); localStorage.setItem("chat_user", JSON.stringify({...u, username:name})); } catch {}
-    setEditName(false); setSavedOk(true); setTimeout(() => setSavedOk(false), 2200);
+    saveProfile(p);
+    if (currentUser?._id) {
+      try {
+        const { data } = await api.put(`/users/${currentUser._id}/profile`, {
+          username: name,
+          about,
+          avatar: photo ?? "",
+        });
+        const merged = {
+          name: data.username,
+          about: data.about,
+          photoBase64: data.avatar || null,
+        };
+        saveProfile(merged);
+        onProfileSave?.(merged);
+      } catch (err) {
+        console.error("Profile save error:", err);
+        const msg = err.response?.data?.message || err.message || "Could not save profile";
+        alert("Failed to save: " + msg);
+        return;
+      }
+    } else {
+      onProfileSave?.(p);
+      try {
+        const u = JSON.parse(localStorage.getItem("chat_user") || "{}");
+        localStorage.setItem("chat_user", JSON.stringify({ ...u, username: name }));
+      } catch {
+        /* ignore */
+      }
+    }
+    setEditName(false);
+    setSavedOk(true);
+    setTimeout(() => setSavedOk(false), 2200);
   };
 
   const inputStyle = { width:"100%", background:"transparent", border:"none", borderBottom:"2px solid #00a884", color:"var(--text-primary)", fontSize:15, padding:"4px 0 6px", outline:"none", marginTop:4 };

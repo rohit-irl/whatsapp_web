@@ -25,6 +25,11 @@ const SendIcon = () => (
     <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
   </svg>
 );
+const TrashIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+  </svg>
+);
 const EmojiIcon = () => (
   <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
     <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z" />
@@ -43,9 +48,11 @@ const DateSeparator = ({ label }) => (
 );
 const getDateLabel = (rawDate) => {
   if (!rawDate) return "";
-  const d = new Date(rawDate), now = new Date();
+  const d = new Date(rawDate),
+    now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
   if (d >= today) return "TODAY";
   if (d >= yesterday) return "YESTERDAY";
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
@@ -62,61 +69,123 @@ const EmptyState = () => (
       <path d="M416 270l16 16 32-32" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
     <div className="text-center">
-      <h2 style={{ color: "var(--text-primary)", fontSize: 26, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.02em" }}>WhatsApp Web</h2>
+      <h2 style={{ color: "var(--text-primary)", fontSize: 26, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.02em" }}>
+        WhatsApp Web
+      </h2>
       <p style={{ color: "var(--text-secondary)", fontSize: 13, maxWidth: 300, lineHeight: 1.6, margin: 0 }}>
-        Send and receive messages without keeping your phone online.<br />Use WhatsApp on up to 4 linked devices.
+        Send and receive messages without keeping your phone online.
+        <br />
+        Use WhatsApp on up to 4 linked devices.
       </p>
-    </div>
-    <div className="flex items-center gap-2 rounded-full border px-4 py-2 text-xs"
-      style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)", background: "rgba(0,168,132,0.06)" }}>
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{ color: "var(--accent)" }}>
-        <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
-      </svg>
-      Your personal messages are end-to-end encrypted
     </div>
   </div>
 );
 
-const ChatWindow = ({ currentUser, selectedUser, messages, onMessageSent, onReceiveMessage, onBack, onUpdateMessageStatus }) => {
+const blobDurationSec = (blob) =>
+  new Promise((resolve) => {
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement("audio");
+    a.preload = "metadata";
+    a.src = u;
+    a.onloadedmetadata = () => {
+      resolve(Number.isFinite(a.duration) ? a.duration : 0);
+      URL.revokeObjectURL(u);
+    };
+    a.onerror = () => {
+      resolve(0);
+      URL.revokeObjectURL(u);
+    };
+  });
+
+const ChatWindow = ({
+  currentUser,
+  selectedUser,
+  messages,
+  onMessageSent,
+  onReceiveMessage,
+  onBack,
+  onUpdateMessageStatus,
+  scrollToMessageId,
+  onStarChange,
+  onDeleteMessage,
+}) => {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSec, setRecordingSec] = useState(0);
+  const [waveformBars, setWaveformBars] = useState(Array(40).fill(3));
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const tickRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const audioCtxRef = useRef(null);
   const socket = useSocket();
   const bottomRef = useRef(null);
+  const msgRefs = useRef({});
   const inputRef = useRef(null);
   const isMock = selectedUser?.isMock;
+  const isGroup = selectedUser?.isGroup === true;
 
   useEffect(() => {
     if (!socket) return;
     const handleReceive = (msg) => {
       if (!currentUser?._id || !selectedUser?._id) return;
-      if (getId(msg.sender) === selectedUser._id && getId(msg.receiver) === currentUser._id)
+      if (isGroup && String(msg.groupId) === String(selectedUser._id)) {
         onReceiveMessage(msg);
+        return;
+      }
+      if (!isGroup && getId(msg.sender) === selectedUser._id && getId(msg.receiver) === currentUser._id) {
+        onReceiveMessage(msg);
+      }
     };
     socket.on("receiveMessage", handleReceive);
     return () => socket.off("receiveMessage", handleReceive);
-  }, [socket, currentUser?._id, selectedUser?._id, onReceiveMessage]);
+  }, [socket, currentUser?._id, selectedUser?._id, onReceiveMessage, isGroup]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isTyping]);
-  useEffect(() => { if (selectedUser) setTimeout(() => inputRef.current?.focus(), 50); }, [selectedUser?._id]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
 
-  // ── Emoji insert at cursor ────────────────────────────
-  const handleEmojiSelect = useCallback((emoji) => {
-    const input = inputRef.current;
-    if (!input) { setDraft(p => p + emoji); return; }
-    const start = input.selectionStart ?? draft.length;
-    const end   = input.selectionEnd   ?? draft.length;
-    const newDraft = draft.slice(0, start) + emoji + draft.slice(end);
-    setDraft(newDraft);
-    requestAnimationFrame(() => {
-      input.setSelectionRange(start + emoji.length, start + emoji.length);
-      input.focus();
-    });
-  }, [draft]);
+  useEffect(() => {
+    if (selectedUser) setTimeout(() => inputRef.current?.focus(), 50);
+  }, [selectedUser?._id]);
 
-  // ── Send text ─────────────────────────────────────────
+  useEffect(() => {
+    if (!scrollToMessageId) return;
+    const el = msgRefs.current[scrollToMessageId];
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [scrollToMessageId, messages]);
+
+  const handleEmojiSelect = useCallback(
+    (emoji) => {
+      const input = inputRef.current;
+      if (!input) {
+        setDraft((p) => p + emoji);
+        return;
+      }
+      const start = input.selectionStart ?? draft.length;
+      const end = input.selectionEnd ?? draft.length;
+      const newDraft = draft.slice(0, start) + emoji + draft.slice(end);
+      setDraft(newDraft);
+      requestAnimationFrame(() => {
+        input.setSelectionRange(start + emoji.length, start + emoji.length);
+        input.focus();
+      });
+    },
+    [draft]
+  );
+
+  const sendPayload = async (body) => {
+    const { data } = await api.post("/messages", body);
+    onMessageSent({ ...data, status: data.status || MSG_STATUS.SENT });
+    socket?.emit("sendMessage", data);
+  };
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     const text = draft.trim();
@@ -127,12 +196,14 @@ const ChatWindow = ({ currentUser, selectedUser, messages, onMessageSent, onRece
     if (!isMock) {
       try {
         setIsSending(true);
-        const { data } = await api.post("/messages", { sender: currentUser._id, receiver: selectedUser._id, text });
-        onMessageSent({ ...data, status: data.status || MSG_STATUS.SENT });
-        socket?.emit("sendMessage", data);
+        const base = { sender: currentUser._id, text, type: "text" };
+        if (isGroup) await sendPayload({ ...base, groupId: selectedUser._id });
+        else await sendPayload({ ...base, receiver: selectedUser._id });
         setIsSending(false);
         return;
-      } catch { setIsSending(false); }
+      } catch {
+        setIsSending(false);
+      }
     }
     sendMockText(text);
   };
@@ -144,7 +215,6 @@ const ChatWindow = ({ currentUser, selectedUser, messages, onMessageSent, onRece
     triggerMockReply();
   };
 
-  // ── Send file ─────────────────────────────────────────
   const handleFileSelected = ({ fileType, file, fileUrl }) => {
     const msg = buildFileMockMessage({ senderId: currentUser._id, receiverId: selectedUser._id, file, fileType, fileUrl });
     onMessageSent(msg);
@@ -165,99 +235,386 @@ const ChatWindow = ({ currentUser, selectedUser, messages, onMessageSent, onRece
       setIsTyping(true);
       setTimeout(() => {
         setIsTyping(false);
-        onReceiveMessage({ ...buildMockMessage({ senderId: selectedUser._id, receiverId: currentUser._id, text: getRandomReply() }), status: undefined });
+        onReceiveMessage({
+          ...buildMockMessage({ senderId: selectedUser._id, receiverId: currentUser._id, text: getRandomReply() }),
+          status: undefined,
+        });
       }, delay);
     }, 400);
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // Web Audio API for live waveform
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtxRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const BAR_COUNT = 40;
+      const dataArr = new Uint8Array(analyser.frequencyBinCount);
+      const drawWave = () => {
+        analyser.getByteFrequencyData(dataArr);
+        const bars = [];
+        const step = Math.floor(dataArr.length / BAR_COUNT);
+        for (let i = 0; i < BAR_COUNT; i++) {
+          const val = dataArr[i * step] / 255; // 0-1
+          bars.push(Math.max(3, Math.round(val * 36)));
+        }
+        setWaveformBars(bars);
+        animFrameRef.current = requestAnimationFrame(drawWave);
+      };
+      drawWave();
+
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size) chunksRef.current.push(ev.data);
+      };
+      mr.start();
+      setIsRecording(true);
+      setRecordingSec(0);
+      tickRef.current = setInterval(() => setRecordingSec((s) => s + 1), 1000);
+    } catch {
+      alert("Microphone access is required for voice notes.");
+    }
+  };
+
+  const stopWaveform = () => {
+    cancelAnimationFrame(animFrameRef.current);
+    animFrameRef.current = null;
+    analyserRef.current = null;
+    audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+    setWaveformBars(Array(40).fill(3));
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    clearInterval(tickRef.current);
+    stopWaveform();
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+    setRecordingSec(0);
+  };
+
+  const finishRecording = () => {
+    const mr = mediaRecorderRef.current;
+    if (!mr || mr.state === "inactive") return;
+    mr.onstop = async () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      clearInterval(tickRef.current);
+      stopWaveform();
+      setIsRecording(false);
+      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      chunksRef.current = [];
+      const durationSec = await blobDurationSec(blob);
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const fileUrl = reader.result;
+        if (!selectedUser?._id || !currentUser?._id) return;
+        if (!isMock) {
+          try {
+            const base = {
+              sender: currentUser._id,
+              text: "",
+              type: "audio",
+              fileUrl,
+              fileName: "voice-note.ogg",
+              durationSec: Math.round(durationSec * 10) / 10,
+            };
+            if (isGroup) await sendPayload({ ...base, groupId: selectedUser._id });
+            else await sendPayload({ ...base, receiver: selectedUser._id });
+          } catch (err) {
+            console.error(err);
+          }
+        } else {
+          onMessageSent({
+            _id: `mock-voice-${Date.now()}`,
+            sender: currentUser._id,
+            receiver: selectedUser._id,
+            type: "audio",
+            fileType: "audio",
+            fileUrl,
+            fileName: "voice-note.ogg",
+            durationSec,
+            text: "",
+            timestamp: new Date().toISOString(),
+            status: MSG_STATUS.SENT,
+            isMock: true,
+          });
+        }
+      };
+      reader.readAsDataURL(blob);
+      setRecordingSec(0);
+    };
+    mr.stop();
+  };
+
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
 
   const renderMessages = () => {
-    const items = []; let lastLabel = "";
+    const items = [];
+    let lastLabel = "";
     messages.forEach((msg, idx) => {
       const raw = msg.timestamp || msg.createdAt;
       const label = getDateLabel(raw);
-      if (label && label !== lastLabel) { lastLabel = label; items.push(<DateSeparator key={`d-${idx}`} label={label} />); }
+      if (label && label !== lastLabel) {
+        lastLabel = label;
+        items.push(<DateSeparator key={`d-${idx}`} label={label} />);
+      }
       const prev = messages[idx - 1];
       const currSender = getId(msg.sender);
+      const prevSender = prev ? getId(prev.sender) : null;
+      const mid = msg._id || `${currSender}-${raw}-${idx}`;
       items.push(
-        <MessageBubble key={msg._id || `${currSender}-${raw}-${idx}`}
-          message={msg}
-          isOwnMessage={currSender === currentUser?._id}
-          isFirstInGroup={currSender !== (prev ? getId(prev.sender) : null)}
-        />
+        <div key={mid} ref={(el) => { if (msg._id) msgRefs.current[msg._id] = el; }}>
+          <MessageBubble
+            message={msg}
+            isOwnMessage={currSender === currentUser?._id}
+            isFirstInGroup={currSender !== prevSender}
+            showSenderName={isGroup}
+            currentUserId={currentUser?._id}
+            onStarChange={onStarChange}
+            onDeleteMessage={onDeleteMessage}
+          />
+        </div>
       );
     });
     return items;
   };
 
   const hasDraft = draft.trim().length > 0;
+  const fmtRec = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  const actionButton = () => {
+    if (isRecording) {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={finishRecording}
+            className="flex h-11 w-11 items-center justify-center rounded-full"
+            style={{ background: "var(--accent)", color: "#fff", flexShrink: 0 }}
+            aria-label="Send voice"
+            title="Send voice note"
+          >
+            <SendIcon />
+          </button>
+        </>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          if (hasDraft) handleSubmit();
+          else startRecording();
+        }}
+        disabled={isSending}
+        aria-label={hasDraft ? "Send" : "Voice"}
+        className="flex h-11 w-11 items-center justify-center rounded-full transition-all duration-200"
+        style={{ background: "var(--accent)", flexShrink: 0, color: "#fff" }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+      >
+        <span key={hasDraft ? "send" : "mic"} className="animate-icon-in block">
+          {hasDraft ? <SendIcon /> : <MicIcon />}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden" style={{ background: "var(--bg-chat)" }}>
-      {!selectedUser ? <EmptyState /> : (
+      {!selectedUser ? (
+        <EmptyState />
+      ) : (
         <>
           <ChatHeader selectedUser={selectedUser} onBack={onBack} />
 
-          <div className="scrollbar-wa chat-bg flex-1 overflow-y-auto px-4 py-3"
-            style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <div
+            className="scrollbar-wa chat-bg flex-1 overflow-y-auto px-4 py-3"
+            style={{ display: "flex", flexDirection: "column", gap: "2px" }}
+          >
             {messages.length === 0 && !isTyping && (
-              <div className="mx-auto mt-4"><span className="date-chip">Messages are end-to-end encrypted 🔒</span></div>
+              <div className="mx-auto mt-4">
+                <span className="date-chip">Messages are end-to-end encrypted 🔒</span>
+              </div>
             )}
             {renderMessages()}
             {isTyping && <TypingIndicator />}
             <div ref={bottomRef} style={{ height: 1 }} />
           </div>
 
-          {/* Input bar — position:relative for absolute pickers */}
           <div className="relative flex items-end gap-2 px-3 py-2" style={{ background: "var(--bg-input)", flexShrink: 0 }}>
-
-            {/* Emoji picker */}
             <EmojiPicker isOpen={showEmoji} onClose={() => setShowEmoji(false)} onEmojiSelect={handleEmojiSelect} />
-
-            {/* Attach menu */}
             <AttachMenu isOpen={showAttach} onClose={() => setShowAttach(false)} onFileSelected={handleFileSelected} />
 
             <div className="flex items-center gap-1 pb-0.5">
-              <button type="button" aria-label="Emoji"
-                onClick={() => { setShowEmoji(v => !v); setShowAttach(false); }}
+              <button
+                type="button"
+                aria-label="Emoji"
+                onClick={() => {
+                  setShowEmoji((v) => !v);
+                  setShowAttach(false);
+                }}
                 className="flex h-9 w-9 items-center justify-center rounded-full transition-colors"
                 style={{ color: showEmoji ? "var(--accent)" : "var(--text-secondary)" }}
-                onMouseEnter={e => e.currentTarget.style.color = "var(--text-primary)"}
-                onMouseLeave={e => e.currentTarget.style.color = showEmoji ? "var(--accent)" : "var(--text-secondary)"}>
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = showEmoji ? "var(--accent)" : "var(--text-secondary)")}
+              >
                 <EmojiIcon />
               </button>
-              <button type="button" aria-label="Attach"
-                onClick={() => { setShowAttach(v => !v); setShowEmoji(false); }}
+              <button
+                type="button"
+                aria-label="Attach"
+                onClick={() => {
+                  setShowAttach((v) => !v);
+                  setShowEmoji(false);
+                }}
                 className="flex h-9 w-9 items-center justify-center rounded-full transition-colors"
                 style={{ color: showAttach ? "var(--accent)" : "var(--text-secondary)" }}
-                onMouseEnter={e => e.currentTarget.style.color = "var(--text-primary)"}
-                onMouseLeave={e => e.currentTarget.style.color = showAttach ? "var(--accent)" : "var(--text-secondary)"}>
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = showAttach ? "var(--accent)" : "var(--text-secondary)")}
+              >
                 <AttachIcon />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-1 items-center">
-              <input ref={inputRef} type="text" value={draft}
-                onChange={e => setDraft(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder="Type a message" disabled={isSending}
-                className="w-full rounded-full px-5 py-2.5 text-sm outline-none"
-                style={{ background: "var(--bg-sidebar)", color: "var(--text-primary)", border: "1px solid var(--border-subtle)", caretColor: "var(--accent)", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" }}
-                onFocus={() => { setShowEmoji(false); setShowAttach(false); }} />
-            </form>
+            {!isRecording ? (
+              <form onSubmit={handleSubmit} className="flex flex-1 items-center">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message"
+                  disabled={isSending}
+                  className="w-full rounded-full px-5 py-2.5 text-sm outline-none"
+                  style={{
+                    background: "var(--bg-sidebar)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-subtle)",
+                    caretColor: "var(--accent)",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+                  }}
+                  onFocus={() => {
+                    setShowEmoji(false);
+                    setShowAttach(false);
+                  }}
+                />
+              </form>
+            ) : (
+              /* ── RECORDING BAR ── */
+              <div
+                className="flex flex-1 items-center gap-2 px-3"
+                style={{
+                  background: "var(--bg-sidebar)",
+                  borderRadius: 24,
+                  border: "1px solid var(--border-subtle)",
+                  minHeight: 44,
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                {/* delete / discard */}
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  title="Delete recording"
+                  aria-label="Delete recording"
+                  style={{
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: "rgba(241,92,109,0.15)",
+                    color: "#f15c6d",
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "background 0.18s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(241,92,109,0.30)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(241,92,109,0.15)")}
+                >
+                  <TrashIcon />
+                </button>
 
-            <button type="button" onClick={handleSubmit} disabled={isSending}
-              aria-label={hasDraft ? "Send" : "Voice"}
-              className="flex h-11 w-11 items-center justify-center rounded-full transition-all duration-200"
-              style={{ background: "var(--accent)", flexShrink: 0, color: "#fff" }}
-              onMouseEnter={e => e.currentTarget.style.background = "var(--accent-hover)"}
-              onMouseLeave={e => e.currentTarget.style.background = "var(--accent)"}>
-              <span key={hasDraft ? "send" : "mic"} className="animate-icon-in block">
-                {hasDraft ? <SendIcon /> : <MicIcon />}
-              </span>
-            </button>
+                {/* pulsing red dot */}
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#f15c6d",
+                    flexShrink: 0,
+                    animation: "recPulse 1s ease-in-out infinite",
+                  }}
+                />
+
+                {/* timer */}
+                <span
+                  className="text-xs tabular-nums"
+                  style={{ color: "#f15c6d", fontWeight: 600, minWidth: 36, flexShrink: 0 }}
+                >
+                  {fmtRec(recordingSec)}
+                </span>
+
+                {/* live waveform */}
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 2,
+                    height: 36,
+                    overflow: "hidden",
+                  }}
+                >
+                  {waveformBars.map((h, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: 3,
+                        height: h,
+                        borderRadius: 4,
+                        background:
+                          h > 24
+                            ? "#f15c6d"
+                            : h > 12
+                            ? "var(--accent)"
+                            : "var(--text-secondary)",
+                        transition: "height 0.08s ease, background 0.15s",
+                        flexShrink: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1">{actionButton()}</div>
           </div>
         </>
       )}

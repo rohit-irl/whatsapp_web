@@ -58,7 +58,14 @@ const Login = () => {
 
       localStorage.setItem(
         "chat_user",
-        JSON.stringify({ _id: userData._id, username: userData.username })
+        JSON.stringify({
+          _id: userData._id,
+          username: userData.username,
+          avatar: userData.avatar ?? "",
+          about: userData.about ?? "",
+          isOnline: userData.isOnline ?? true,
+          lastSeen: userData.lastSeen ?? null,
+        })
       );
       navigate("/chat");
     } catch (requestError) {

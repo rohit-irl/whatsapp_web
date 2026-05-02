@@ -47,7 +47,7 @@ const Avatar = ({ username, photoUrl, size = 40 }) => {
 // ChatHeader — uses formatLastSeen(contactId, isOnline) for real per-contact timestamps
 const ChatHeader = ({ selectedUser, onBack, currentUserPhoto }) => {
   const isOnline = selectedUser?.isOnline === true;
-  const lastSeenText = formatLastSeen(selectedUser?._id, isOnline);
+  const lastSeenText = formatLastSeen(selectedUser?._id, isOnline, selectedUser?.lastSeen);
 
   return (
     <div className="sticky top-0 z-20 flex h-[60px] items-center gap-3 px-4"
@@ -65,16 +65,25 @@ const ChatHeader = ({ selectedUser, onBack, currentUserPhoto }) => {
       )}
 
       {/* Contact avatar (not current user photo) */}
-      <Avatar username={selectedUser?.username} size={40} />
+      <Avatar username={selectedUser?.username} photoUrl={selectedUser?.avatar} size={40} />
 
       <div className="flex flex-1 flex-col justify-center min-w-0">
         <p className="truncate font-bold leading-tight" style={{ color: "var(--text-primary)", fontSize: "15px" }}>
-          {selectedUser?.username ?? ""}
+          {selectedUser?.isGroup ? selectedUser?.name : selectedUser?.username ?? ""}
+          {selectedUser?.isGroup && selectedUser?.members?.length ? (
+            <span className="font-normal" style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
+              {" "}
+              · {selectedUser.members.length} members
+            </span>
+          ) : null}
         </p>
-        {/* Per-contact real lastSeen or online */}
-        {isOnline ? (
-          <p className="flex items-center gap-1.5 text-xs leading-tight" style={{ color: "var(--accent)" }}>
-            <span className="animate-pulse-dot" style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
+        {selectedUser?.isGroup ? (
+          <p className="text-xs leading-tight truncate" style={{ color: "var(--text-secondary)" }}>
+            Group chat
+          </p>
+        ) : isOnline ? (
+          <p className="flex items-center gap-1.5 text-xs leading-tight" style={{ color: "#00a884" }}>
+            <span className="animate-pulse-dot" style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#00a884", flexShrink: 0 }} />
             online
           </p>
         ) : (

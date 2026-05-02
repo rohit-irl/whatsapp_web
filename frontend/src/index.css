@@ -197,6 +197,12 @@ body,
   animation: settings-slide-in 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Recording indicator dot pulse */
+@keyframes recPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.7); }
+}
+
 
 /* ─────────────────────────────────────────
    Chat background — WhatsApp tile pattern (light)
