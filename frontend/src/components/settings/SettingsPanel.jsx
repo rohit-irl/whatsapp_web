@@ -68,7 +68,7 @@ const CATS = [
 ];
 
 // ── RightPanel ────────────────────────────────────────────
-const RightPanel = ({ cat, currentUser, onProfileSave }) => {
+const RightPanel = ({ cat, currentUser, profilePhoto, onProfileSave }) => {
   const saved = loadProfile();
   const [name, setName] = useState(
     () => currentUser?.username || saved?.name || "User"
@@ -77,7 +77,7 @@ const RightPanel = ({ cat, currentUser, onProfileSave }) => {
     () => currentUser?.about ?? saved?.about ?? "Hey there! I am using WhatsApp."
   );
   const [photo, setPhoto] = useState(
-    () => currentUser?.avatar || saved?.photoBase64 || null
+    () => profilePhoto || currentUser?.avatar || null
   );
   const [editName, setEditName]= useState(false);
   const [savedOk,  setSavedOk] = useState(false);
@@ -141,8 +141,9 @@ const RightPanel = ({ cat, currentUser, onProfileSave }) => {
       } catch (err) {
         console.error("Profile save error:", err);
         const msg = err.response?.data?.message || err.message || "Could not save profile";
-        alert("Failed to save: " + msg);
-        return;
+        // Still propagate the local save so the avatar stays in sync in the UI
+        onProfileSave?.(p);
+        alert("Failed to save to server: " + msg);
       }
     } else {
       onProfileSave?.(p);
@@ -329,7 +330,7 @@ const RightPanel = ({ cat, currentUser, onProfileSave }) => {
 };
 
 // ── SettingsPanel ─────────────────────────────────────────
-const SettingsPanel = ({ onBack, currentUser, onProfileSave }) => {
+const SettingsPanel = ({ onBack, currentUser, profilePhoto, onProfileSave }) => {
   const [cat, setCat] = useState("profile");
   const [catSearch, setCatSearch] = useState("");
   const [showLogout, setShowLogout] = useState(false);
@@ -367,8 +368,10 @@ const SettingsPanel = ({ onBack, currentUser, onProfileSave }) => {
           onClick={() => setCat("profile")}
           onMouseEnter={e=>{ if(cat!=="profile") e.currentTarget.style.background="var(--bg-hover)"; }}
           onMouseLeave={e=>{ e.currentTarget.style.background= cat==="profile"?"var(--bg-sidebar)":"transparent"; }}>
-          {saved?.photoBase64
-            ? <img src={saved.photoBase64} alt="p" style={{ width:56, height:56, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+          {/* Avatar: use live profilePhoto prop first (same source as LeftNav), then backend avatar. */}
+          {/* Intentionally skip saved?.photoBase64 — wa_profile is shared across users and can show wrong photo */}
+          {(profilePhoto || currentUser?.avatar)
+            ? <img src={profilePhoto || currentUser?.avatar} alt="p" style={{ width:56, height:56, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
             : <div style={{ width:56, height:56, borderRadius:"50%", background:"linear-gradient(135deg,#00a884,#007d5e)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, color:"#fff", flexShrink:0 }}>{(saved?.name||currentUser?.username||"U")[0].toUpperCase()}</div>
           }
           <div>
@@ -424,7 +427,7 @@ const SettingsPanel = ({ onBack, currentUser, onProfileSave }) => {
       {/* ── Right panel — slide animation on cat change ── */}
       <div key={cat} className="scrollbar-wa animate-settings-slide"
         style={{ flex:1, background:"var(--bg-sidebar)", overflowY:"auto" }}>
-        <RightPanel cat={cat} currentUser={currentUser} onProfileSave={onProfileSave} />
+        <RightPanel cat={cat} currentUser={currentUser} profilePhoto={profilePhoto} onProfileSave={onProfileSave} />
       </div>
 
       {/* Logout modal */}

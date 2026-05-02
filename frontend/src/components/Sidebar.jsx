@@ -304,8 +304,11 @@ const Sidebar = ({
       /* ignore */
     }
     if (socket) socket.emit("user_offline", currentUser._id);
+    // Clear all user-specific keys so no data (including profile photo) leaks to the next user
     localStorage.removeItem("chat_user");
     localStorage.removeItem(LS_ACTIVE_KEY);
+    localStorage.removeItem("wa_profile");
+    localStorage.removeItem("wa_chats");
     navigate("/");
   };
 

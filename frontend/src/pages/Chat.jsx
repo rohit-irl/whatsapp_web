@@ -30,7 +30,9 @@ const Chat = () => {
     }
   });
 
-  const [profilePhoto, setProfilePhoto] = useState(() => loadProfile()?.photoBase64 || null);
+  // Use currentUser?.avatar as the primary source — it's stored in chat_user (user-scoped).
+  // wa_profile is a shared key and can contain a different user's photo if they didn't fully clear storage.
+  const [profilePhoto, setProfilePhoto] = useState(() => currentUser?.avatar || null);
 
   const [allChats, setAllChats] = useState(() => loadPersistedChats());
   const [selectedUser, setSelectedUser] = useState(() => loadPersistedActiveChat());
@@ -51,6 +53,7 @@ const Chat = () => {
     }
   }, [allChats]);
 
+  
   useEffect(() => {
     if (selectedUser) localStorage.setItem(LS_ACTIVE_KEY, JSON.stringify(selectedUser));
     else localStorage.removeItem(LS_ACTIVE_KEY);
@@ -88,6 +91,18 @@ const Chat = () => {
     };
     socket.on("profile_updated", onProfile);
 
+    // Real-time: update selectedUser's online status + lastSeen whenever any user status changes.
+    // This is what drives the "last seen" text in ChatHeader — without this listener,
+    // selectedUser.lastSeen is frozen at the moment the chat was opened.
+    const onStatusChange = ({ userId, isOnline, lastSeen }) => {
+      setSelectedUser((u) =>
+        u && String(u._id) === String(userId)
+          ? { ...u, isOnline, lastSeen }
+          : u
+      );
+    };
+    socket.on("user_status_change", onStatusChange);
+
     // Real-time: another user deleted a message for everyone → show tombstone
     const onMsgUpdated = ({ messageId, deletedForEveryone }) => {
       if (!deletedForEveryone) return;
@@ -104,6 +119,7 @@ const Chat = () => {
 
     return () => {
       socket.off("profile_updated", onProfile);
+      socket.off("user_status_change", onStatusChange);
       socket.off("messageUpdated", onMsgUpdated);
     };
   }, [socket]);
@@ -326,6 +342,7 @@ const Chat = () => {
         return (
           <SettingsPanel
             currentUser={currentUser}
+            profilePhoto={profilePhoto}
             onBack={() => setActivePanel("chats")}
             onProfileSave={handleProfileSave}
           />
