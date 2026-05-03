@@ -63,28 +63,135 @@ const getDateLabel = (rawDate) => {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 };
 
-const EmptyState = () => (
-  <div className="flex h-full flex-col items-center justify-center gap-6" style={{ background: "var(--bg-chat)" }}>
-    <svg width="240" height="188" viewBox="0 0 880 595" fill="none" opacity="0.25">
-      <rect x="160" y="80" width="560" height="380" rx="24" fill="#00a884" />
-      <rect x="200" y="120" width="480" height="300" rx="12" fill="#efeae2" />
-      <rect x="300" y="460" width="280" height="24" rx="4" fill="#00a884" />
-      <rect x="240" y="484" width="400" height="16" rx="8" fill="#00a884" />
-      <circle cx="440" cy="270" r="60" fill="#00a884" opacity="0.5" />
-      <path d="M416 270l16 16 32-32" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-    <div className="text-center">
-      <h2 style={{ color: "var(--text-primary)", fontSize: 26, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.02em" }}>
-        WhatsApp Web
-      </h2>
-      <p style={{ color: "var(--text-secondary)", fontSize: 13, maxWidth: 300, lineHeight: 1.6, margin: 0 }}>
-        Send and receive messages without keeping your phone online.
-        <br />
-        Use WhatsApp on up to 4 linked devices.
+const EmptyState = ({ activePanel }) => {
+  let config = {
+    title: "WhatsApp Web",
+    subtitle: "Send and receive messages without keeping your phone online. Use WhatsApp on up to 4 linked devices and 1 phone at the same time.",
+    icon: (
+      <svg viewBox="0 0 420 320" width="320" height="240" fill="currentColor">
+        <path d="M210 20c-100 0-180 80-180 180s80 180 180 180 180-80 180-180S310 20 210 20zm0 320c-77.3 0-140-62.7-140-140S132.7 60 210 60s140 62.7 140 140-62.7 140-140 140z" />
+        <path d="M210 100c-55.2 0-100 44.8-100 100s44.8 100 100 100 100-44.8 100-100-44.8-100-100-100zm0 160c-33.1 0-60-26.9-60-60s26.9-60 60-60 60 26.9 60 60-26.9 60-60 60z" />
+      </svg>
+    ),
+    accent: "#25d366"
+  };
+  
+  if (activePanel === "status") {
+    config = {
+      title: "Status Updates",
+      subtitle: "Share photos, videos and text that disappear after 24 hours.",
+      content: (
+        <div className="mt-6 flex flex-col items-center gap-4 text-sm text-gray-500">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25d366] text-white">✓</span>
+            <span>Your status is end-to-end encrypted</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white">👁</span>
+            <span>See who viewed your updates</span>
+          </div>
+        </div>
+      ),
+      icon: (
+        <svg viewBox="0 0 24 24" width="160" height="160" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.5-9H13V7h-2v5c0 .55.45 1 1 1h3.5v-2z" />
+        </svg>
+      ),
+      accent: "#00a884"
+    };
+  } else if (activePanel === "calls") {
+    config = {
+      title: "Calls",
+      subtitle: "Recent and missed calls will show up here.",
+      content: (
+        <div className="mt-8 grid grid-cols-2 gap-6 text-left">
+          <div className="rounded-xl border border-dashed border-gray-300 p-4">
+            <h4 className="mb-2 font-bold text-gray-700">Voice Calls</h4>
+            <p className="text-xs text-gray-500">High-quality voice calling for personal or group conversations.</p>
+          </div>
+          <div className="rounded-xl border border-dashed border-gray-300 p-4">
+            <h4 className="mb-2 font-bold text-gray-700">Video Calls</h4>
+            <p className="text-xs text-gray-500">Face-to-face video calls with up to 32 people in a group.</p>
+          </div>
+        </div>
+      ),
+      icon: (
+        <svg viewBox="0 0 24 24" width="160" height="160" fill="currentColor">
+          <path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1.02 1.02 0 00-1.02.24l-2.2 2.2a15.045 15.045 0 01-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02A11.36 11.36 0 018.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1zM19 12h2a9 9 0 00-9-9v2c3.87 0 7 3.13 7 7zm-4 0h2c0-2.76-2.24-5-5-5v2c1.66 0 3 1.34 3 3z" />
+        </svg>
+      ),
+      accent: "#008069"
+    };
+  } else if (activePanel === "communities") {
+    config = {
+      title: "Communities",
+      subtitle: "Build a community and stay organized.",
+      content: (
+        <div className="mt-8 flex flex-col gap-6">
+          <img 
+            src="/community_illustration.png" 
+            alt="Communities" 
+            style={{ width: 300, height: "auto", borderRadius: 16, opacity: 0.9 }} 
+          />
+          <p className="max-w-sm text-sm text-gray-500">
+            Communities help you bring related groups together and manage all your announcements in one place.
+          </p>
+        </div>
+      ),
+      icon: null,
+      accent: "#54656f"
+    };
+  } else if (activePanel === "settings") {
+    config = {
+      title: "Settings",
+      subtitle: "Customize your account and privacy.",
+      content: (
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <div className="h-2 w-48 rounded-full bg-gray-100"><div className="h-full w-1/3 rounded-full bg-blue-500"></div></div>
+          <p className="text-xs text-gray-400">Settings synchronized across all linked devices</p>
+        </div>
+      ),
+      icon: (
+        <svg viewBox="0 0 24 24" width="160" height="160" fill="currentColor">
+          <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+        </svg>
+      ),
+      accent: "#8696a0"
+    };
+  }
+
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center p-8 text-center"
+      style={{ 
+        background: "var(--bg-empty)", 
+        borderBottom: `6px solid ${config.accent}`,
+        transition: "all 0.5s ease-in-out"
+      }}
+    >
+      <div className="mb-6 opacity-10 animate-fade-in-up" style={{ color: config.accent }}>
+        {config.icon}
+      </div>
+      <h1 className="mb-3 text-3xl font-light tracking-tight text-gray-700 animate-fade-in-up" style={{ color: "var(--text-primary)" }}>
+        {config.title}
+      </h1>
+      <p className="max-w-md text-sm leading-relaxed text-gray-500 animate-fade-in-up" style={{ color: "var(--text-secondary)" }}>
+        {config.subtitle}
       </p>
+      {config.content && (
+        <div className="animate-fade-in-up">
+          {config.content}
+        </div>
+      )}
+      <div className="mt-12 flex items-center gap-2 text-xs text-gray-400 opacity-60">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+        </svg>
+        End-to-end encrypted
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const blobDurationSec = (blob) =>
   new Promise((resolve) => {
@@ -113,8 +220,9 @@ const ChatWindow = ({
   onUpdateMessageStatus,
   scrollToMessageId,
   onDeleteMessage,
-  isTypingFor,          // userId or groupId of whoever is typing — from Chat.jsx
+  isTypingFor,
   onCall,
+  activePanel,
 }) => {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -511,7 +619,7 @@ const ChatWindow = ({
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden" style={{ background: "var(--bg-chat)" }}>
       {!selectedUser ? (
-        <EmptyState />
+        <EmptyState activePanel={activePanel} />
       ) : (
         <>
           <ChatHeader 

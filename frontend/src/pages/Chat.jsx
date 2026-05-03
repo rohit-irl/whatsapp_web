@@ -54,7 +54,7 @@ const Chat = () => {
   const socketConnectedRef = useRef(false);
   const typingTimerRef = useRef({});
   const selectedUserRef = useRef(selectedUser);
-  
+
   useEffect(() => {
     selectedUserRef.current = selectedUser;
   }, [selectedUser]);
@@ -67,7 +67,7 @@ const Chat = () => {
     }
   }, [allChats]);
 
-  
+
   useEffect(() => {
     if (selectedUser) localStorage.setItem(LS_ACTIVE_KEY, JSON.stringify(selectedUser));
     else localStorage.removeItem(LS_ACTIVE_KEY);
@@ -129,7 +129,7 @@ const Chat = () => {
         : senderId === String(currentUser?._id)
           ? receiverId
           : senderId;
-      
+
       setAllChats((p) => {
         const ex = p[cid] || [];
         if (ex.some((m) => String(m._id) === String(msg._id))) return p;
@@ -138,11 +138,11 @@ const Chat = () => {
 
       setUnreadCounts((u) => {
         if (selectedUserRef.current && String(selectedUserRef.current._id) === String(cid)) {
-          return u; 
+          return u;
         }
         return { ...u, [cid]: (u[cid] || 0) + 1 };
       });
-      
+
       const senderIdStr = String(typeof msg.sender === "object" ? msg.sender._id : msg.sender);
       if (senderIdStr && senderIdStr !== String(currentUser._id)) {
         socket.emit("message_delivered", {
@@ -257,8 +257,8 @@ const Chat = () => {
 
   const activeMessages = selectedUser
     ? [...(allChats[selectedUser._id] || [])].sort(
-        (a, b) => new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt)
-      )
+      (a, b) => new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt)
+    )
     : [];
 
   const mergeMessages = (existing = [], incoming = [], deletedSet) => {
@@ -487,7 +487,6 @@ const Chat = () => {
           <CommunitiesPanel
             onSelectAnnouncement={(community) => {
               handleSelectUser(community);
-              // We DON'T set activePanel to null here, keeping the communities list open
             }}
           />
         );
@@ -534,10 +533,18 @@ const Chat = () => {
     >
       <LeftNav
         activePanel={activePanel}
-        onPanelChange={setActivePanel}
+        onPanelChange={(panel) => {
+          setActivePanel(panel);
+          if (panel !== "chats" && panel !== "archived") {
+            setSelectedUser(null);
+          }
+        }}
         currentUser={currentUser}
         profilePhoto={profilePhoto || currentUser?.avatar}
-        onSettingsClick={() => setActivePanel("settings")}
+        onSettingsClick={() => {
+          setActivePanel("settings");
+          setSelectedUser(null);
+        }}
       />
 
       <div className="flex flex-1 overflow-hidden" style={{ minWidth: 0 }}>
@@ -580,6 +587,7 @@ const Chat = () => {
             scrollToMessageId={scrollToMessageId}
             isTypingFor={isTypingFor}
             onCall={handleStartCall}
+            activePanel={activePanel}
           />
           {call.status && (
             <CallModal
