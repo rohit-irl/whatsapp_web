@@ -45,7 +45,7 @@ const Avatar = ({ username, photoUrl, size = 40 }) => {
 };
 
 // ChatHeader — uses formatLastSeen(contactId, isOnline) for real per-contact timestamps
-const ChatHeader = ({ selectedUser, onBack, currentUserPhoto }) => {
+const ChatHeader = ({ selectedUser, onBack, currentUserPhoto, onCall, onSearch }) => {
   const isOnline = selectedUser?.isOnline === true;
   const lastSeenText = formatLastSeen(selectedUser?._id, isOnline, selectedUser?.lastSeen);
 
@@ -94,12 +94,24 @@ const ChatHeader = ({ selectedUser, onBack, currentUserPhoto }) => {
       </div>
 
       <div className="flex items-center gap-1">
-        {[{ Icon: VideoIcon, label: "Video call" }, { Icon: PhoneIcon, label: "Call" }, { Icon: SearchIcon, label: "Search" }].map(({ Icon, label }) => (
+        {[
+          { Icon: VideoIcon, label: "Video call", type: "video" }, 
+          { Icon: PhoneIcon, label: "Call", type: "voice" }, 
+          { Icon: SearchIcon, label: "Search", type: "search" }
+        ].map(({ Icon, label, type }) => (
           <button key={label} type="button" aria-label={label}
+            onClick={() => {
+              if (type === "search") onSearch?.();
+              else if (type && !selectedUser?.isGroup) onCall?.(type);
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-full transition-colors"
-            style={{ color: "var(--text-secondary)" }}
-            onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}>
+            style={{ 
+              color: "var(--text-secondary)",
+              opacity: (type !== "search" && type && selectedUser?.isGroup) ? 0.4 : 1,
+              cursor: (type !== "search" && type && selectedUser?.isGroup) ? "not-allowed" : "pointer"
+            }}
+            onMouseEnter={e => { if (!(type !== "search" && type && selectedUser?.isGroup)) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
+            onMouseLeave={e => { if (!(type !== "search" && type && selectedUser?.isGroup)) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; } }}>
             <Icon />
           </button>
         ))}

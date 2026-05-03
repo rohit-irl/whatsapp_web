@@ -118,6 +118,11 @@ const DropdownMenu = ({ anchorEl, items, onClose, alignRight }) => {
 
   useEffect(() => {
     const onMD  = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) onClose(); };
+    const getId = (v) => {
+      if (!v) return null;
+      if (typeof v === "object") return v._id || v;
+      return v;
+    };
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("mousedown", onMD);
     document.addEventListener("keydown",   onKey);
@@ -185,7 +190,6 @@ const MessageBubble = ({
   isFirstInGroup,
   showSenderName,
   currentUserId,
-  onStarChange,
   onDeleteMessage,
 }) => {
   const ref        = useRef(null);
@@ -201,7 +205,21 @@ const MessageBubble = ({
   const isFile    = !!message.fileType && message.type !== "audio";
   const isAudio   = message.type === "audio" || message.fileType === "audio";
   const isDeleted = !!message.deletedForEveryone;
-  const senderName = typeof message.sender === "object" && message.sender?.username
+  
+  const getId = (v) => {
+    if (!v) return null;
+    if (typeof v === "object") return v._id || v;
+    return v;
+  };
+
+  const currSender = getId(message.sender);
+  
+  if (!currSender && !message.deletedForEveryone && !message.isMock) {
+    console.warn(">>> [FRONTEND] Message hidden: no sender", message);
+    return null;
+  }
+  
+  const senderName = (typeof message.sender === "object" && message.sender?.username)
     ? message.sender.username : "";
 
   /* ── Actions ── */
@@ -240,9 +258,9 @@ const MessageBubble = ({
     if (message.text && !isAudio) {
       menuItems.push({ icon: "📋", label: "Copy text", action: doCopy });
     }
+    if (menuItems.length > 0) menuItems.push({ divider: true });
+    menuItems.push({ icon: "🙈", label: "Delete for me", action: doDeleteForMe, danger: true });
     if (isOwnMessage) {
-      if (menuItems.length > 0) menuItems.push({ divider: true });
-      menuItems.push({ icon: "🙈", label: "Delete for me",      action: doDeleteForMe,       danger: true });
       menuItems.push({ icon: "🗑", label: "Delete for everyone", action: doDeleteForEveryone, danger: true, bold: true });
     }
   }
@@ -338,7 +356,26 @@ const MessageBubble = ({
           <>
             {isAudio && <AudioContent message={message} />}
             {isFile  && <FileContent  message={message} />}
-            {message.text && !isAudio && (
+            {message.type === "call" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0", minWidth: 160 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%", background: "rgba(0,168,132,0.1)",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18
+                }}>
+                  {message.text.includes("Video") ? "📹" : "📞"}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{message.text}</div>
+                  {message.durationSec > 0 && (
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                      Duration: {Math.floor(message.durationSec / 60)}:
+                      {String(message.durationSec % 60).padStart(2, "0")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {message.text && !isAudio && message.type !== "call" && (
               <span
                 className="block whitespace-pre-wrap leading-relaxed"
                 style={{ fontSize: "14px", minWidth: 60 }}
@@ -365,7 +402,7 @@ const MessageBubble = ({
           }}
         >
           {formattedTime}
-          {isOwnMessage && !isDeleted && <TickIcon status={message.status} />}
+          {isOwnMessage && !isDeleted && <TickIcon status={message.status || "sent"} />}
         </div>
       </div>
     </div>

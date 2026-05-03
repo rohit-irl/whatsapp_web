@@ -5,10 +5,12 @@ import Message from "../models/Message.js";
 export const shapeMessage = (doc) => {
   if (!doc) return null;
   const m = doc.toObject ? doc.toObject() : { ...doc };
+  console.log(">>> [SHAPE] sender:", typeof m.sender, m.sender?._id || m.sender);
   const fileType =
     m.type === "image" ? "image" : m.type === "audio" ? "audio" : m.type === "document" ? "document" : null;
   return {
     ...m,
+    status: m.status || "sent",
     fileType,
   };
 };
@@ -27,8 +29,8 @@ export const sendMessage = async (req, res, next) => {
       durationSec = 0,
     } = req.body;
 
-    if (!sender || !mongoose.isValidObjectId(String(sender))) {
-      return res.status(400).json({ message: "Valid sender is required" });
+    if (!sender) {
+      return res.status(400).json({ message: "Sender is required" });
     }
 
     const msgType = ["text", "image", "document", "audio"].includes(type) ? type : "text";
@@ -64,7 +66,7 @@ export const sendMessage = async (req, res, next) => {
       });
 
       const populated = await Message.findById(doc._id)
-        .populate("sender", "username avatar")
+        .populate({ path: "sender", model: "User", select: "username avatar" })
         .populate("groupId", "name members");
 
       const payload = shapeMessage(populated);
@@ -72,7 +74,7 @@ export const sendMessage = async (req, res, next) => {
       return res.status(201).json(payload);
     }
 
-    if (!receiver || !mongoose.isValidObjectId(String(receiver))) {
+    if (!receiver) {
       return res.status(400).json({ message: "Receiver is required for direct messages" });
     }
 
@@ -87,10 +89,11 @@ export const sendMessage = async (req, res, next) => {
     });
 
     const populated = await Message.findById(doc._id)
-      .populate("sender", "username avatar")
-      .populate("receiver", "username avatar");
+      .populate({ path: "sender", model: "User", select: "username avatar" })
+      .populate({ path: "receiver", model: "User", select: "username avatar" });
 
     const payload = shapeMessage(populated);
+    console.log("[SOCKET] Emitting new_message to receiver: " + receiver);
     io?.to(String(receiver)).emit("receiveMessage", payload);
     return res.status(201).json(payload);
   } catch (error) {
@@ -102,23 +105,49 @@ export const getMessagesBetweenUsers = async (req, res, next) => {
   try {
     const { user1, user2 } = req.params;
 
-    const messages = await Message.find({
+    const u1Arr = [user1];
+    if (mongoose.isValidObjectId(String(user1))) u1Arr.push(new mongoose.Types.ObjectId(String(user1)));
+    const u2Arr = [user2];
+    if (mongoose.isValidObjectId(String(user2))) u2Arr.push(new mongoose.Types.ObjectId(String(user2)));
+
+    const query = {
       $and: [
         { $or: [{ groupId: null }, { groupId: { $exists: false } }] },
         {
           $or: [
-            { sender: user1, receiver: user2 },
-            { sender: user2, receiver: user1 },
-          ],
+            { sender: { $in: u1Arr }, receiver: { $in: u2Arr } },
+            { sender: { $in: u2Arr }, receiver: { $in: u1Arr } }
+          ]
         },
-        { deletedFor: { $ne: user1 } }, // hide msgs deleted for requesting user
-      ],
-    })
-      .sort({ timestamp: 1 })
-      .populate("sender", "username avatar")
-      .populate("receiver", "username avatar");
+        { deletedFor: { $nin: u1Arr } }
+      ]
+    };
+    console.log(">>> [QUERY] Fetching messages:", JSON.stringify(query));
 
-    return res.status(200).json(messages.map(shapeMessage));
+    const docs = await Message.find(query).sort({ timestamp: 1, createdAt: 1 });
+    const results = [];
+    for (const doc of docs) {
+      const sId = doc.sender;
+      const rId = doc.receiver;
+      
+      // Only populate if it looks like a real database ID
+      if (mongoose.isValidObjectId(String(sId))) {
+        await doc.populate({ path: "sender", model: "User", select: "username avatar" });
+      }
+      if (rId && mongoose.isValidObjectId(String(rId))) {
+        await doc.populate({ path: "receiver", model: "User", select: "username avatar" });
+      }
+
+      // If population failed (user deleted or mock ID), restore the original ID
+      const m = doc.toObject();
+      if (!m.sender) m.sender = sId;
+      if (rId && !m.receiver) m.receiver = rId;
+
+      results.push(shapeMessage(m));
+    }
+
+    console.log(">>> [QUERY] Found messages count:", results.length);
+    return res.status(200).json(results);
   } catch (error) {
     return next(error);
   }
@@ -137,10 +166,19 @@ export const getGroupMessages = async (req, res, next) => {
       return res.status(403).json({ message: "Not a member" });
     }
 
-    const filter = { groupId, ...(memberId ? { deletedFor: { $ne: memberId } } : {}) };
+    const memberIds = [memberId];
+    if (memberId && mongoose.isValidObjectId(String(memberId))) {
+      memberIds.push(new mongoose.Types.ObjectId(String(memberId)));
+    }
+
+    const filter = { 
+      groupId, 
+      ...(memberId ? { deletedFor: { $nin: memberIds } } : {}) 
+    };
+
     const messages = await Message.find(filter)
-      .sort({ timestamp: 1 })
-      .populate("sender", "username avatar");
+      .sort({ timestamp: 1, createdAt: 1 })
+      .populate({ path: "sender", model: "User", select: "username avatar" });
 
     return res.status(200).json(messages.map(shapeMessage));
   } catch (error) {
@@ -177,8 +215,8 @@ export const getStarredMessages = async (req, res, next) => {
 
     const messages = await Message.find({ starredBy: userId })
       .sort({ timestamp: -1 })
-      .populate("sender", "username avatar")
-      .populate("receiver", "username avatar")
+      .populate({ path: "sender", model: "User", select: "username avatar" })
+      .populate({ path: "receiver", model: "User", select: "username avatar" })
       .populate("groupId", "name");
 
     return res.status(200).json(messages.map(shapeMessage));
@@ -219,6 +257,7 @@ export const deleteForEveryone = async (req, res, next) => {
     }
     const msg = await Message.findById(messageId);
     if (!msg) return res.status(404).json({ message: "Message not found" });
+
     if (String(msg.sender) !== String(userId)) {
       return res.status(403).json({ message: "Only sender can delete for everyone" });
     }
@@ -247,6 +286,24 @@ export const deleteForEveryone = async (req, res, next) => {
     return res.status(200).json({ success: true });
   } catch (error) {
     return next(error);
+  }
+};
+
+export const markMessagesSeen = async (req, res, next) => {
+  try {
+    const { senderId, receiverId } = req.body;
+    if (senderId && receiverId) {
+      const updateRes = await Message.updateMany(
+        { sender: senderId, receiver: receiverId, status: { $ne: "seen" } },
+        { $set: { status: "seen" } }
+      );
+      console.log("[SOCKET] Marking seen, senderId: " + senderId + " updated count: " + updateRes.modifiedCount);
+      const io = req.app.get("io");
+      io?.to(String(senderId)).emit("messages_seen", { readerId: receiverId, chatId: senderId });
+    }
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return next(err);
   }
 };
 

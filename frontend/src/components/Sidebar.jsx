@@ -208,7 +208,9 @@ const Sidebar = ({
   profilePhoto,
   onOpenArchived,
   onOpenSettings,
+  allChats = {},
 }) => {
+  console.log("[BADGE] unreadCounts prop received: " + JSON.stringify(unreadCounts));
   const socket = useSocket();
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -357,9 +359,32 @@ const Sidebar = ({
         pinned: pinG.has(String(g._id)),
       }));
 
-    const merged = [...groupRows, ...userRows].sort((a, b) => {
+    const merged = [...groupRows, ...userRows].map(row => {
+      const chatHistory = [...(allChats[String(row._id)] || [])].sort((a, b) => {
+        const ta = new Date(a.timestamp || a.createdAt).getTime();
+        const tb = new Date(b.timestamp || b.createdAt).getTime();
+        return ta - tb;
+      });
+      const latestMsg = chatHistory.length > 0 ? chatHistory[chatHistory.length - 1] : null;
+      const time = latestMsg ? (latestMsg.timestamp || latestMsg.createdAt) : (row.lastMessageTime || row.updatedAt);
+      
+      let subtitle = row.isGroup ? `${row.memberCount || 0} members · Group` : row.isOnline ? "online" : "";
+      if (latestMsg) {
+        if (latestMsg.deletedForEveryone) subtitle = "🚫 This message was deleted";
+        else if (latestMsg.type === "audio") subtitle = "🎤 Voice message";
+        else if (latestMsg.fileUrl) subtitle = "📁 File";
+        else subtitle = latestMsg.text;
+      }
+      
+      return {
+        ...row,
+        computedTime: time ? new Date(time).getTime() : 0,
+        displaySubtitle: subtitle,
+        latestMsgTime: time,
+      };
+    }).sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      return (a.sortName || "").localeCompare(b.sortName || "");
+      return b.computedTime - a.computedTime;
     });
 
     return merged.filter((r) => (r.sortName || "").toLowerCase().includes(searchQuery.toLowerCase()));
@@ -442,12 +467,6 @@ const Sidebar = ({
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <IconBtn label="Communities">
-            <CommunitiesIcon />
-          </IconBtn>
-          <IconBtn label="New chat">
-            <NewChatIcon />
-          </IconBtn>
           <IconBtn label="Menu" onClick={() => setShowKebab((v) => !v)}>
             <KebabIcon />
           </IconBtn>
@@ -539,8 +558,9 @@ const Sidebar = ({
         {rows.map((row, idx) => {
           const isActive = selectedUser?._id === row._id;
           const unread = unreadCounts[row._id] || 0;
+          console.log("[BADGE] rendering row for: " + row._id + " unread: " + unread);
           const isLast = idx === rows.length - 1;
-          const subtitle = row.isGroup ? `${row.memberCount || 0} members · Group` : row.isOnline ? "online" : "";
+          const subtitle = row.displaySubtitle || "Tap to open";
 
           return (
             <div
@@ -608,7 +628,7 @@ const Sidebar = ({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {formatTimestamp(row.lastMessageTime || row.updatedAt || new Date())}
+                      {formatTimestamp(row.latestMsgTime || row.updatedAt || new Date())}
                     </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 2 }}>

@@ -11,6 +11,7 @@ import groupRoutes from "./routes/groupRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import statusRoutes from "./routes/statusRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import callRoutes from "./routes/callRoutes.js";
 import configureSocket from "./socket/socket.js";
 
 dotenv.config();
@@ -63,6 +64,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/status", statusRoutes);
+app.use("/api/calls", callRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

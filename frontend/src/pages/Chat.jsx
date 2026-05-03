@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import api from "../api/axios";
 import ChatWindow from "../components/ChatWindow";
@@ -7,9 +7,11 @@ import Sidebar from "../components/Sidebar";
 import ArchivedPanel from "../components/panels/ArchivedPanel";
 import CallsPanel from "../components/panels/CallsPanel";
 import CommunitiesPanel from "../components/panels/CommunitiesPanel";
-import StarredPanel from "../components/panels/StarredPanel";
+
+
 import StatusPanel from "../components/panels/StatusPanel";
 import SettingsPanel from "../components/settings/SettingsPanel";
+import CallModal from "../components/CallModal";
 import useSocket from "../hooks/useSocket";
 import {
   LS_ACTIVE_KEY,
@@ -41,9 +43,21 @@ const Chat = () => {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [activePanel, setActivePanel] = useState("chats");
   const [scrollToMessageId, setScrollToMessageId] = useState(null);
-  const [starTick, setStarTick] = useState(0);
+
+
+  // isTypingFor: userId/groupId of whoever is currently typing → shown in ChatWindow
+  const [isTypingFor, setIsTypingFor] = useState(null);
+  const [call, setCall] = useState({ status: null, username: "", avatar: "", type: "", partnerId: null, isCaller: false });
   // Track IDs deleted "for me" locally so polling doesn't revert them
   const localDeletedIdsRef = useRef(new Set());
+  // Track socket connection state so we can skip the fallback poll when live
+  const socketConnectedRef = useRef(false);
+  const typingTimerRef = useRef({});
+  const selectedUserRef = useRef(selectedUser);
+  
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
 
   useEffect(() => {
     try {
@@ -73,6 +87,15 @@ const Chat = () => {
 
   useEffect(() => {
     if (!socket) return;
+
+    // ── Track connection state ────────────────────────────
+    const onConnect = () => { socketConnectedRef.current = true; };
+    const onDisconnect = () => { socketConnectedRef.current = false; };
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socketConnectedRef.current = socket.connected;
+
+    // ── Profile updates ───────────────────────────────────
     const onProfile = ({ userId, avatar, username, about }) => {
       setSelectedUser((u) =>
         u && String(u._id) === String(userId) ? { ...u, avatar, username, ...(about != null ? { about } : {}) } : u
@@ -85,42 +108,150 @@ const Chat = () => {
           localStorage.setItem("chat_user", JSON.stringify(next));
           setCurrentUser(next);
         }
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
     };
     socket.on("profile_updated", onProfile);
 
-    // Real-time: update selectedUser's online status + lastSeen whenever any user status changes.
-    // This is what drives the "last seen" text in ChatHeader — without this listener,
-    // selectedUser.lastSeen is frozen at the moment the chat was opened.
+    // ── Status / lastSeen ─────────────────────────────────
     const onStatusChange = ({ userId, isOnline, lastSeen }) => {
       setSelectedUser((u) =>
-        u && String(u._id) === String(userId)
-          ? { ...u, isOnline, lastSeen }
-          : u
+        u && String(u._id) === String(userId) ? { ...u, isOnline, lastSeen } : u
       );
     };
     socket.on("user_status_change", onStatusChange);
 
-    // Real-time: another user deleted a message for everyone → show tombstone
+    // ── Incoming messages (ALL chats, not just active) ────
+    const onReceive = (msg) => {
+      const senderId = String(typeof msg.sender === "object" ? msg.sender._id : msg.sender);
+      const receiverId = String(typeof msg.receiver === "object" ? msg.receiver._id : msg.receiver);
+      const cid = msg.groupId
+        ? String(msg.groupId)
+        : senderId === String(currentUser?._id)
+          ? receiverId
+          : senderId;
+      
+      setAllChats((p) => {
+        const ex = p[cid] || [];
+        if (ex.some((m) => String(m._id) === String(msg._id))) return p;
+        return { ...p, [cid]: [...ex, msg] };
+      });
+
+      setUnreadCounts((u) => {
+        if (selectedUserRef.current && String(selectedUserRef.current._id) === String(cid)) {
+          return u; 
+        }
+        return { ...u, [cid]: (u[cid] || 0) + 1 };
+      });
+      
+      const senderIdStr = String(typeof msg.sender === "object" ? msg.sender._id : msg.sender);
+      if (senderIdStr && senderIdStr !== String(currentUser._id)) {
+        socket.emit("message_delivered", {
+          messageId: msg._id,
+          senderId: senderIdStr,
+          chatId: msg.groupId ? msg.groupId : currentUser._id,
+        });
+      }
+    };
+    socket.on("receiveMessage", onReceive);
+
+    // ── Typing indicators ────────────────────────────────
+    const onTyping = ({ senderId, groupId }) => {
+      const key = groupId ? String(groupId) : String(senderId);
+      setIsTypingFor(key);
+      clearTimeout(typingTimerRef.current[key]);
+      typingTimerRef.current[key] = setTimeout(() => {
+        setIsTypingFor((cur) => (cur === key ? null : cur));
+      }, 3000);
+    };
+    const onStopTyping = ({ senderId, groupId }) => {
+      const key = groupId ? String(groupId) : String(senderId);
+      clearTimeout(typingTimerRef.current[key]);
+      setIsTypingFor((cur) => (cur === key ? null : cur));
+    };
+    socket.on("typing", onTyping);
+    socket.on("stop_typing", onStopTyping);
+
+    // ── Read receipts ─────────────────────────────────────
+    const onMessagesSeen = ({ readerId }) => {
+      setAllChats((p) => {
+        const cid = String(readerId);
+        if (!p[cid]) return p;
+        return {
+          ...p,
+          [cid]: p[cid].map((m) =>
+            m.status !== "seen" ? { ...m, status: "seen" } : m
+          ),
+        };
+      });
+    };
+    socket.on("messages_seen", onMessagesSeen);
+
+    // ── Message Status Update ─────────────────────────────
+    const onMessageStatusUpdate = ({ messageId, chatId, status }) => {
+      setAllChats((p) => {
+        const up = { ...p };
+        for (const cid in up) {
+          up[cid] = up[cid].map((m) => {
+            if (String(m._id) === String(messageId) && m.status !== "seen") {
+              return { ...m, status };
+            }
+            return m;
+          });
+        }
+        return up;
+      });
+    };
+    socket.on("message_status_update", onMessageStatusUpdate);
+
+    // ── Delete for everyone ───────────────────────────────
     const onMsgUpdated = ({ messageId, deletedForEveryone }) => {
       if (!deletedForEveryone) return;
       setAllChats((p) => {
         const up = { ...p };
         for (const cid in up)
           up[cid] = up[cid].map((m) =>
-            String(m._id) === String(messageId) ? { ...m, deletedForEveryone: true, text: "", fileUrl: "", fileName: "" } : m
+            String(m._id) === String(messageId)
+              ? { ...m, deletedForEveryone: true, text: "", fileUrl: "", fileName: "" }
+              : m
           );
         return up;
       });
     };
     socket.on("messageUpdated", onMsgUpdated);
 
+    // ── Call signaling ─────────────────────────────────────
+    const onIncomingCall = ({ callerId, callerName, callerAvatar, type, callId }) => {
+      setCall({ status: "incoming", username: callerName, avatar: callerAvatar, type, partnerId: callerId, isCaller: false, callId });
+    };
+    const onCallInitiated = ({ callId }) => {
+      setCall((p) => ({ ...p, callId }));
+    };
+    const onCallAccepted = ({ callId }) => setCall((p) => ({ ...p, status: "active", callId: callId || p.callId }));
+    const onCallRejected = () => setCall({ status: null, username: "", avatar: "", type: "", partnerId: null, isCaller: false, callId: null });
+    const onCallEnded = () => setCall({ status: null, username: "", avatar: "", type: "", partnerId: null, isCaller: false, callId: null });
+
+    socket.on("incoming_call", onIncomingCall);
+    socket.on("call_initiated", onCallInitiated);
+    socket.on("call_accepted", onCallAccepted);
+    socket.on("call_rejected", onCallRejected);
+    socket.on("call_ended", onCallEnded);
+
     return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
       socket.off("profile_updated", onProfile);
       socket.off("user_status_change", onStatusChange);
+      socket.off("receiveMessage", onReceive);
+      socket.off("typing", onTyping);
+      socket.off("stop_typing", onStopTyping);
+      socket.off("messages_seen", onMessagesSeen);
+      socket.off("message_status_update", onMessageStatusUpdate);
       socket.off("messageUpdated", onMsgUpdated);
+      socket.off("incoming_call", onIncomingCall);
+      socket.off("call_initiated", onCallInitiated);
+      socket.off("call_accepted", onCallAccepted);
+      socket.off("call_rejected", onCallRejected);
+      socket.off("call_ended", onCallEnded);
     };
   }, [socket]);
 
@@ -130,28 +261,31 @@ const Chat = () => {
       )
     : [];
 
-  const mergeMessages = (existing, incoming, deletedSet) => {
-    // IMPORTANT: filter BOTH sides by deletedSet — otherwise brandNew re-adds server messages
-    // that were deleted locally but the API hasn't persisted yet
+  const mergeMessages = (existing = [], incoming = [], deletedSet) => {
+    if (!Array.isArray(existing)) existing = [];
+    if (!Array.isArray(incoming)) incoming = [];
+
     const filteredIncoming = incoming.filter((m) => !deletedSet.has(String(m._id)));
     const base = existing.filter((m) => !deletedSet.has(String(m._id)));
 
     const serverById = new Map(filteredIncoming.map((m) => [String(m._id), m]));
     const existingIds = new Set(base.map((m) => String(m._id)));
 
-    // Update existing with server data; but preserve local tombstone (deletedForEveryone)
-    // so the UI stays deleted even if the server hasn't committed the change yet
     const updated = base.map((m) => {
       const sv = serverById.get(String(m._id));
-      if (!sv) return m;                  // not on server yet — keep local (optimistic)
-      if (m.deletedForEveryone) return m; // local tombstone wins over stale server data
-      return sv;                          // use fresh server data
+      if (!sv) return m;
+      if (m.deletedForEveryone) return m;
+      return sv;
     });
 
-    // Add genuinely new messages from server (messages from the other user)
     const brandNew = filteredIncoming.filter((m) => !existingIds.has(String(m._id)));
 
-    return [...updated, ...brandNew];
+    const combined = [...updated, ...brandNew];
+    return combined.sort((a, b) => {
+      const ta = new Date(a.timestamp || a.createdAt).getTime();
+      const tb = new Date(b.timestamp || b.createdAt).getTime();
+      return ta - tb;
+    });
   };
 
   const fetchMessages = async (user) => {
@@ -178,6 +312,7 @@ const Chat = () => {
   useEffect(() => {
     if (!currentUser?._id || !selectedUser?._id || selectedUser?.isMock) return;
     const poll = async () => {
+      if (socketConnectedRef.current) return;
       try {
         let data;
         if (selectedUser.isGroup) {
@@ -193,11 +328,10 @@ const Chat = () => {
             localDeletedIdsRef.current
           ),
         }));
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
     };
-    const id = setInterval(poll, 8000);
+    poll();
+    const id = setInterval(poll, 30000);
     return () => clearInterval(id);
   }, [selectedUser?._id, selectedUser?.isMock, selectedUser?.isGroup, currentUser?._id]);
 
@@ -225,16 +359,13 @@ const Chat = () => {
     });
   };
 
-  const handleReceiveMessage = (msg) => {
+  const handleReceiveMessage = useCallback((msg) => {
     const cid = msg.groupId ? String(msg.groupId) : String(typeof msg.sender === "object" ? msg.sender._id : msg.sender);
     setAllChats((p) => {
       const ex = p[cid] || [];
-      return ex.some((m) => m._id === msg._id) ? p : { ...p, [cid]: [...ex, msg] };
+      return ex.some((m) => String(m._id) === String(msg._id)) ? p : { ...p, [cid]: [...ex, msg] };
     });
-    if (String(cid) !== String(selectedUser?._id)) {
-      setUnreadCounts((p) => ({ ...p, [cid]: (p[cid] || 0) + 1 }));
-    }
-  };
+  }, []);
 
   const handleUpdateMessageStatus = (msgId, status) => {
     setAllChats((p) => {
@@ -244,19 +375,15 @@ const Chat = () => {
     });
   };
 
-  // mode: 'me' | 'everyone'
   const handleDeleteMessage = (msgId, mode) => {
     if (mode === "me") {
-      // Track so polling doesn't bring it back
       localDeletedIdsRef.current.add(msgId);
-      // Remove from local state
       setAllChats((p) => {
         const up = { ...p };
         for (const cid in up) up[cid] = up[cid].filter((m) => m._id !== msgId);
         return up;
       });
     } else {
-      // "everyone" — stamp tombstone locally; backend persists it
       setAllChats((p) => {
         const up = { ...p };
         for (const cid in up)
@@ -288,48 +415,53 @@ const Chat = () => {
     }
   };
 
-  const onJumpToStarred = async (msg) => {
-    const myId = String(currentUser._id);
-    let openUser;
-
-    if (msg.groupId) {
-      const gid = typeof msg.groupId === "object" ? msg.groupId._id : msg.groupId;
-      const g = typeof msg.groupId === "object" ? msg.groupId : null;
-      openUser = {
-        _id: String(gid),
-        name: g?.name || "Group",
-        isGroup: true,
-        members: g?.members,
-      };
-    } else {
-      const senderId = String(msg.sender?._id || msg.sender);
-      const receiverId = String(msg.receiver?._id || msg.receiver);
-      const peerId = senderId === myId ? receiverId : senderId;
-      const peerObj = senderId === myId ? msg.receiver : msg.sender;
-      openUser =
-        typeof peerObj === "object" && peerObj?.username
-          ? peerObj
-          : { _id: peerId, username: "User", avatar: "" };
+  const handleStartCall = (type) => {
+    if (!selectedUser || !currentUser || !socket) {
+      console.error(">>> [FRONTEND] Cannot start call: missing data", { selectedUser, currentUser, socket: !!socket });
+      return;
     }
-
-    setActivePanel("chats");
-    await handleSelectUser(openUser, { scrollToId: msg._id });
+    const payload = {
+      callerId: currentUser._id,
+      callerName: currentUser.username,
+      callerAvatar: currentUser.avatar,
+      receiverId: selectedUser._id,
+      type
+    };
+    console.log(">>> [FRONTEND] Emitting call_user", payload);
+    setCall({ status: "calling", username: selectedUser.username, avatar: selectedUser.avatar, type, partnerId: selectedUser._id, isCaller: true, callId: null });
+    socket.emit("call_user", payload);
   };
+
+  const handleAcceptCall = () => {
+    if (!call.partnerId || !currentUser || !socket) return;
+    socket.emit("accept_call", { callerId: call.partnerId, receiverId: currentUser._id, callId: call.callId });
+    setCall((prev) => ({ ...prev, status: "active" }));
+  };
+
+  const handleRejectCall = () => {
+    if (!call.partnerId || !currentUser || !socket) return;
+    socket.emit("reject_call", { callerId: call.partnerId, receiverId: currentUser._id, callId: call.callId });
+    setCall({ status: null, username: "", avatar: "", type: "", partnerId: null, isCaller: false, callId: null });
+  };
+
+  const handleEndCall = () => {
+    if (!call.partnerId || !currentUser || !socket) return;
+    socket.emit("end_call", { receiverId: call.partnerId, callerId: currentUser._id, callId: call.callId });
+    setCall({ status: null, username: "", avatar: "", type: "", partnerId: null, isCaller: false, callId: null });
+  };
+
 
   if (!localStorage.getItem("chat_user")) return <Navigate to="/" replace />;
 
   const renderPanel = () => {
     switch (activePanel) {
       case "calls":
-        return <CallsPanel />;
+        return <CallsPanel currentUser={currentUser} activePanel={activePanel} />;
       case "communities":
         return <CommunitiesPanel />;
       case "status":
         return <StatusPanel currentUser={currentUser} socket={socket} />;
-      case "starred":
-        return (
-          <StarredPanel currentUser={currentUser} onOpenMessage={onJumpToStarred} refreshKey={starTick} />
-        );
+
       case "archived":
         return (
           <ArchivedPanel
@@ -363,6 +495,7 @@ const Chat = () => {
                 profilePhoto={profilePhoto}
                 onOpenArchived={() => setActivePanel("archived")}
                 onOpenSettings={() => setActivePanel("settings")}
+                allChats={allChats}
               />
             </div>
             <div
@@ -385,14 +518,25 @@ const Chat = () => {
                 currentUser={currentUser}
                 selectedUser={selectedUser}
                 messages={activeMessages}
+                loadingMessages={loadingMessages}
                 onMessageSent={handleMessageSent}
                 onReceiveMessage={handleReceiveMessage}
                 onUpdateMessageStatus={handleUpdateMessageStatus}
                 onDeleteMessage={handleDeleteMessage}
                 onBack={() => setMobileChatOpen(false)}
+                onStarChange={() => {}}
                 scrollToMessageId={scrollToMessageId}
-                onStarChange={() => setStarTick((t) => t + 1)}
+                isTypingFor={isTypingFor}
+                onCall={handleStartCall}
               />
+              {call.status && (
+                <CallModal
+                  callData={call}
+                  onAccept={handleAcceptCall}
+                  onReject={handleRejectCall}
+                  onEnd={handleEndCall}
+                />
+              )}
             </div>
           </>
         );

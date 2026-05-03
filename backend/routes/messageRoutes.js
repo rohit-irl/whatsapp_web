@@ -7,6 +7,7 @@ import {
   getStarredMessages,
   sendMessage,
   toggleStarMessage,
+  markMessagesSeen,
 } from "../controllers/messageController.js";
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.patch("/delete-for-me/:messageId", deleteForMe);
 router.patch("/delete-for-everyone/:messageId", deleteForEveryone);
 router.get("/group/:groupId", getGroupMessages);
 router.post("/", sendMessage);
+router.put("/mark-seen", markMessagesSeen);
 router.get("/:user1/:user2", getMessagesBetweenUsers);
 
 export default router;
