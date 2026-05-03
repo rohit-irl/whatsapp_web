@@ -23,8 +23,10 @@ const SearchIcon = () => (
 
 // Avatar — shows photo if available, else gradient initials
 const Avatar = ({ username, photoUrl, size = 40 }) => {
+  const isEmoji = photoUrl && photoUrl.length <= 2;
   const [from, to] = getAvatarGradient(username);
-  if (photoUrl) {
+
+  if (photoUrl && !isEmoji) {
     return (
       <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0, cursor: "pointer" }}>
         <img src={photoUrl} alt={username} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -34,12 +36,13 @@ const Avatar = ({ username, photoUrl, size = 40 }) => {
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%",
-      background: `linear-gradient(135deg, ${from}, ${to})`,
+      background: isEmoji ? "var(--bg-sidebar-header)" : `linear-gradient(135deg, ${from}, ${to})`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      flexShrink: 0, fontSize: size * 0.38, fontWeight: 700, color: "#fff",
+      flexShrink: 0, fontSize: size * (isEmoji ? 0.5 : 0.38), fontWeight: 700, color: "#fff",
       cursor: "pointer", userSelect: "none",
+      border: isEmoji ? "1px solid var(--border-subtle)" : "none"
     }}>
-      {username?.[0]?.toUpperCase() ?? "?"}
+      {isEmoji ? photoUrl : (username?.[0]?.toUpperCase() ?? "?")}
     </div>
   );
 };
@@ -102,16 +105,16 @@ const ChatHeader = ({ selectedUser, onBack, currentUserPhoto, onCall, onSearch }
           <button key={label} type="button" aria-label={label}
             onClick={() => {
               if (type === "search") onSearch?.();
-              else if (type && !selectedUser?.isGroup) onCall?.(type);
+              else if (type && !selectedUser?.isGroup && !selectedUser?.isCommunity) onCall?.(type);
             }}
             className="flex h-9 w-9 items-center justify-center rounded-full transition-colors"
             style={{ 
               color: "var(--text-secondary)",
-              opacity: (type !== "search" && type && selectedUser?.isGroup) ? 0.4 : 1,
-              cursor: (type !== "search" && type && selectedUser?.isGroup) ? "not-allowed" : "pointer"
+              opacity: (type !== "search" && type && (selectedUser?.isGroup || selectedUser?.isCommunity)) ? 0.4 : 1,
+              cursor: (type !== "search" && type && (selectedUser?.isGroup || selectedUser?.isCommunity)) ? "not-allowed" : "pointer"
             }}
-            onMouseEnter={e => { if (!(type !== "search" && type && selectedUser?.isGroup)) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
-            onMouseLeave={e => { if (!(type !== "search" && type && selectedUser?.isGroup)) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; } }}>
+            onMouseEnter={e => { if (!(type !== "search" && type && (selectedUser?.isGroup || selectedUser?.isCommunity))) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
+            onMouseLeave={e => { if (!(type !== "search" && type && (selectedUser?.isGroup || selectedUser?.isCommunity))) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; } }}>
             <Icon />
           </button>
         ))}

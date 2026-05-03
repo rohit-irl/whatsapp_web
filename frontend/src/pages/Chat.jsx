@@ -289,7 +289,32 @@ const Chat = () => {
   };
 
   const fetchMessages = async (user) => {
-    if (!currentUser?._id || !user?._id || user?.isMock) return;
+    if (!currentUser?._id || !user?._id) return;
+    if (user.isMock || ["c1", "c2", "c3"].includes(user._id)) {
+      setLoadingMessages(false);
+      const existing = allChats[user._id] || [];
+      if (existing.length === 0) {
+        const initial = [
+          {
+            _id: `m-${user._id}-1`,
+            sender: user._id,
+            text: `Welcome to the ${user.username} announcements!`,
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+            status: "seen"
+          },
+          {
+            _id: `m-${user._id}-2`,
+            sender: user._id,
+            text: "This is where you'll see important updates and news.",
+            timestamp: new Date().toISOString(),
+            status: "seen"
+          }
+        ];
+        setAllChats(p => ({ ...p, [user._id]: initial }));
+      }
+      return;
+    }
+
     try {
       setLoadingMessages(true);
       let data;
@@ -453,15 +478,21 @@ const Chat = () => {
 
   if (!localStorage.getItem("chat_user")) return <Navigate to="/" replace />;
 
-  const renderPanel = () => {
+  const renderLeftPanel = () => {
     switch (activePanel) {
       case "calls":
         return <CallsPanel currentUser={currentUser} activePanel={activePanel} />;
       case "communities":
-        return <CommunitiesPanel />;
+        return (
+          <CommunitiesPanel
+            onSelectAnnouncement={(community) => {
+              handleSelectUser(community);
+              // We DON'T set activePanel to null here, keeping the communities list open
+            }}
+          />
+        );
       case "status":
         return <StatusPanel currentUser={currentUser} socket={socket} />;
-
       case "archived":
         return (
           <ArchivedPanel
@@ -481,64 +512,17 @@ const Chat = () => {
         );
       default:
         return (
-          <>
-            <div
-              className={`h-full w-full md:flex md:w-auto ${mobileChatOpen ? "hidden" : "flex"}`}
-              style={{ flexShrink: 0 }}
-            >
-              <Sidebar
-                currentUser={currentUser}
-                selectedUser={selectedUser}
-                onSelectUser={handleSelectUser}
-                unreadCounts={unreadCounts}
-                onClearUnread={handleClearUnread}
-                profilePhoto={profilePhoto}
-                onOpenArchived={() => setActivePanel("archived")}
-                onOpenSettings={() => setActivePanel("settings")}
-                allChats={allChats}
-              />
-            </div>
-            <div
-              className={`relative h-full w-full flex-1 md:flex ${mobileChatOpen ? "flex" : "hidden"}`}
-              style={{ minWidth: 0 }}
-            >
-              {loadingMessages && selectedUser && (
-                <div
-                  className="absolute left-1/2 top-[68px] z-50 -translate-x-1/2 rounded-full px-3 py-1 text-xs shadow"
-                  style={{
-                    background: "rgba(255,255,255,0.9)",
-                    color: "var(--text-secondary)",
-                    border: "1px solid var(--border-subtle)",
-                  }}
-                >
-                  Loading messages…
-                </div>
-              )}
-              <ChatWindow
-                currentUser={currentUser}
-                selectedUser={selectedUser}
-                messages={activeMessages}
-                loadingMessages={loadingMessages}
-                onMessageSent={handleMessageSent}
-                onReceiveMessage={handleReceiveMessage}
-                onUpdateMessageStatus={handleUpdateMessageStatus}
-                onDeleteMessage={handleDeleteMessage}
-                onBack={() => setMobileChatOpen(false)}
-                onStarChange={() => {}}
-                scrollToMessageId={scrollToMessageId}
-                isTypingFor={isTypingFor}
-                onCall={handleStartCall}
-              />
-              {call.status && (
-                <CallModal
-                  callData={call}
-                  onAccept={handleAcceptCall}
-                  onReject={handleRejectCall}
-                  onEnd={handleEndCall}
-                />
-              )}
-            </div>
-          </>
+          <Sidebar
+            currentUser={currentUser}
+            selectedUser={selectedUser}
+            onSelectUser={handleSelectUser}
+            unreadCounts={unreadCounts}
+            onClearUnread={handleClearUnread}
+            profilePhoto={profilePhoto}
+            onOpenArchived={() => setActivePanel("archived")}
+            onOpenSettings={() => setActivePanel("settings")}
+            allChats={allChats}
+          />
         );
     }
   };
@@ -556,8 +540,56 @@ const Chat = () => {
         onSettingsClick={() => setActivePanel("settings")}
       />
 
-      <div key={activePanel} className="animate-panel-fade flex flex-1 overflow-hidden" style={{ minWidth: 0 }}>
-        {renderPanel()}
+      <div className="flex flex-1 overflow-hidden" style={{ minWidth: 0 }}>
+        {/* Left Side: Sidebar / Communities / etc. */}
+        <div
+          className={`h-full w-full md:flex md:w-auto ${mobileChatOpen ? "hidden" : "flex"}`}
+          style={{ flexShrink: 0 }}
+        >
+          {renderLeftPanel()}
+        </div>
+
+        {/* Right Side: Chat Window */}
+        <div
+          className={`relative h-full w-full flex-1 md:flex ${mobileChatOpen ? "flex" : "hidden"}`}
+          style={{ minWidth: 0 }}
+        >
+          {loadingMessages && selectedUser && (
+            <div
+              className="absolute left-1/2 top-[68px] z-50 -translate-x-1/2 rounded-full px-3 py-1 text-xs shadow"
+              style={{
+                background: "rgba(255,255,255,0.9)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border-subtle)",
+              }}
+            >
+              Loading messages…
+            </div>
+          )}
+          <ChatWindow
+            currentUser={currentUser}
+            selectedUser={selectedUser}
+            messages={activeMessages}
+            loadingMessages={loadingMessages}
+            onMessageSent={handleMessageSent}
+            onReceiveMessage={handleReceiveMessage}
+            onUpdateMessageStatus={handleUpdateMessageStatus}
+            onDeleteMessage={handleDeleteMessage}
+            onBack={() => setMobileChatOpen(false)}
+            onStarChange={() => {}}
+            scrollToMessageId={scrollToMessageId}
+            isTypingFor={isTypingFor}
+            onCall={handleStartCall}
+          />
+          {call.status && (
+            <CallModal
+              callData={call}
+              onAccept={handleAcceptCall}
+              onReject={handleRejectCall}
+              onEnd={handleEndCall}
+            />
+          )}
+        </div>
       </div>
     </main>
   );

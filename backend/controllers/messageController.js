@@ -5,7 +5,6 @@ import Message from "../models/Message.js";
 export const shapeMessage = (doc) => {
   if (!doc) return null;
   const m = doc.toObject ? doc.toObject() : { ...doc };
-  console.log(">>> [SHAPE] sender:", typeof m.sender, m.sender?._id || m.sender);
   const fileType =
     m.type === "image" ? "image" : m.type === "audio" ? "audio" : m.type === "document" ? "document" : null;
   return {
@@ -122,7 +121,6 @@ export const getMessagesBetweenUsers = async (req, res, next) => {
         { deletedFor: { $nin: u1Arr } }
       ]
     };
-    console.log(">>> [QUERY] Fetching messages:", JSON.stringify(query));
 
     const docs = await Message.find(query).sort({ timestamp: 1, createdAt: 1 });
     const results = [];
@@ -146,7 +144,6 @@ export const getMessagesBetweenUsers = async (req, res, next) => {
       results.push(shapeMessage(m));
     }
 
-    console.log(">>> [QUERY] Found messages count:", results.length);
     return res.status(200).json(results);
   } catch (error) {
     return next(error);

@@ -37,13 +37,17 @@ const LogoutIcon = () => (
 );
 
 const Avatar = ({ username, photoUrl, size = 46 }) => {
-  if (photoUrl) {
+  // If photoUrl is an emoji or single char, render as text
+  const isEmoji = photoUrl && photoUrl.length <= 2; 
+
+  if (photoUrl && !isEmoji) {
     return (
       <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
         <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </div>
     );
   }
+  
   const [from, to] = getAvatarGradient(username);
   return (
     <div
@@ -51,18 +55,19 @@ const Avatar = ({ username, photoUrl, size = 46 }) => {
         width: size,
         height: size,
         borderRadius: "50%",
-        background: `linear-gradient(135deg, ${from}, ${to})`,
+        background: isEmoji ? "var(--bg-sidebar-header)" : `linear-gradient(135deg, ${from}, ${to})`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
-        fontSize: size * 0.38,
+        fontSize: size * (isEmoji ? 0.5 : 0.38),
         fontWeight: 700,
         color: "#fff",
         userSelect: "none",
+        border: isEmoji ? "1px solid var(--border-subtle)" : "none"
       }}
     >
-      {username?.[0]?.toUpperCase() ?? "?"}
+      {isEmoji ? photoUrl : (username?.[0]?.toUpperCase() ?? "?")}
     </div>
   );
 };
@@ -359,7 +364,9 @@ const Sidebar = ({
         pinned: pinG.has(String(g._id)),
       }));
 
-    const merged = [...groupRows, ...userRows].map(row => {
+    const merged = [...groupRows, ...userRows]
+      .filter((row) => !row.isCommunity && !["c1", "c2", "c3"].includes(String(row._id))) // Strict community filter
+      .map(row => {
       const chatHistory = [...(allChats[String(row._id)] || [])].sort((a, b) => {
         const ta = new Date(a.timestamp || a.createdAt).getTime();
         const tb = new Date(b.timestamp || b.createdAt).getTime();
@@ -396,7 +403,7 @@ const Sidebar = ({
   const handleSelectRow = (row) => {
     onClearUnread?.(row._id);
     if (row.isGroup) {
-      onSelectUser({ ...row, isGroup: true, name: row.name });
+      onSelectUser({ ...row, isGroup: true, name: row.name || row.username });
     } else {
       onSelectUser(row);
     }
