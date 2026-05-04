@@ -2,7 +2,7 @@
 
 A high-performance, real-time WhatsApp Web clone built with the MERN stack (MongoDB, Express, React, Node.js) and Socket.IO. This project replicates the core features of WhatsApp Web, including instant messaging, voice/video calls, status updates, and group chats.
 
-![WhatsApp Web Clone Preview](https://via.placeholder.com/1200x600?text=WhatsApp+Web+Clone+Preview)
+![WhatsApp Web Clone Preview](https://github.com/user-attachments/assets/2d0f08a5-78b8-4224-b8f3-4a86ed82946d)
 
 ## ✨ Features
 
@@ -68,33 +68,28 @@ whatsapp-web-clone/
 ### Installation
 
 1. **Clone the repository**
-   ```bash
+```bash
    git clone https://github.com/rohit-irl/whatsapp_web.git
    cd whatsapp-web-clone
-   ```
+```
 
 2. **Setup Backend**
-   ```bash
+```bash
    cd backend
    npm install
    cp .env.example .env
    # Edit .env and add your MONGO_URI
-
-   # Start the server (Option 1: Nodemon for auto-restart)
    npm run dev
-
-   # Start the server (Option 2: Direct node command)
-   node server.js
-   ```
+```
 
 3. **Setup Frontend**
-   ```bash
+```bash
    cd ../frontend
    npm install
    cp .env.example .env
    # Edit .env and add VITE_API_URL=http://localhost:5000
    npm run dev
-   ```
+```
 
 ## 🔐 Environment Variables
 
@@ -141,14 +136,9 @@ whatsapp-web-clone/
 
 ## 📸 Screenshots
 
-*Coming Soon! Replace these with your actual app screenshots.*
-
-| Login Page | Chat Interface | Status View |
+| Login Page | Chat Interface | Profile |
 | :---: | :---: | :---: |
-| ![Login](<img width="873" height="793" alt="image" src="https://github.com/user-attachments/assets/ea902abf-f091-4986-85f4-9d8e65f92fd7" />
-) | ![Chat](<img width="700" height="576" alt="image" src="https://github.com/user-attachments/assets/5ffb5a0b-cb74-44a7-bcb0-700a034d7c9b" />
-) | ![Profile](<img width="652" height="492" alt="image" src="https://github.com/user-attachments/assets/d888b2ff-ae9e-4ffc-b8d7-3fa060e4b8f4" />
- |
+| ![Login](https://github.com/user-attachments/assets/ea902abf-f091-4986-85f4-9d8e65f92fd7) | ![Chat](https://github.com/user-attachments/assets/5ffb5a0b-cb74-44a7-bcb0-700a034d7c9b) | ![Profile](https://github.com/user-attachments/assets/d888b2ff-ae9e-4ffc-b8d7-3fa060e4b8f4) |
 
 ## 📄 License
 
