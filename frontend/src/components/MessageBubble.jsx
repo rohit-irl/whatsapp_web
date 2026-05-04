@@ -25,8 +25,8 @@ const DoubleTickBlue = () => (
 const TickIcon = ({ status }) => {
   switch (status) {
     case MSG_STATUS.DELIVERED: return <DoubleTickGray />;
-    case MSG_STATUS.SEEN:      return <DoubleTickBlue />;
-    default:                   return <SingleTick />;
+    case MSG_STATUS.SEEN: return <DoubleTickBlue />;
+    default: return <SingleTick />;
   }
 };
 
@@ -110,14 +110,14 @@ const DropdownMenu = ({ anchorEl, items, onClose, alignRight }) => {
     const ar = anchorEl.getBoundingClientRect();
     const mr = menuRef.current.getBoundingClientRect();
     let left = alignRight ? ar.right - mr.width : ar.left;
-    let top  = ar.bottom + 6;
-    left = Math.max(8, Math.min(left, window.innerWidth  - mr.width  - 8));
-    top  = Math.max(8, Math.min(top,  window.innerHeight - mr.height - 8));
+    let top = ar.bottom + 6;
+    left = Math.max(8, Math.min(left, window.innerWidth - mr.width - 8));
+    top = Math.max(8, Math.min(top, window.innerHeight - mr.height - 8));
     setPos({ left, top, opacity: 1 });
   }, [anchorEl, alignRight]);
 
   useEffect(() => {
-    const onMD  = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) onClose(); };
+    const onMD = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) onClose(); };
     const getId = (v) => {
       if (!v) return null;
       if (typeof v === "object") return v._id || v;
@@ -125,10 +125,10 @@ const DropdownMenu = ({ anchorEl, items, onClose, alignRight }) => {
     };
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("mousedown", onMD);
-    document.addEventListener("keydown",   onKey);
+    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onMD);
-      document.removeEventListener("keydown",   onKey);
+      document.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
 
@@ -192,9 +192,9 @@ const MessageBubble = ({
   currentUserId,
   onDeleteMessage,
 }) => {
-  const ref        = useRef(null);
-  const btnRef     = useRef(null);
-  const [hovered,  setHovered]  = useState(false);
+  const ref = useRef(null);
+  const btnRef = useRef(null);
+  const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -202,10 +202,10 @@ const MessageBubble = ({
   }, []);
 
   const formattedTime = formatTimestamp(message.timestamp || message.createdAt);
-  const isFile    = !!message.fileType && message.type !== "audio";
-  const isAudio   = message.type === "audio" || message.fileType === "audio";
+  const isFile = !!message.fileType && message.type !== "audio";
+  const isAudio = message.type === "audio" || message.fileType === "audio";
   const isDeleted = !!message.deletedForEveryone;
-  
+
   const getId = (v) => {
     if (!v) return null;
     if (typeof v === "object") return v._id || v;
@@ -213,19 +213,19 @@ const MessageBubble = ({
   };
 
   const currSender = getId(message.sender);
-  
+
   if (!currSender && !message.deletedForEveryone && !message.isMock) {
     console.warn(">>> [FRONTEND] Message hidden: no sender", message);
     return null;
   }
-  
+
   const senderName = (typeof message.sender === "object" && message.sender?.username)
     ? message.sender.username : "";
 
   /* ── Actions ── */
   const doCopy = () => {
     const t = message.text || "";
-    if (t) navigator.clipboard.writeText(t).catch(() => {});
+    if (t) navigator.clipboard.writeText(t).catch(() => { });
   };
 
   const doDeleteForMe = async () => {
@@ -265,7 +265,7 @@ const MessageBubble = ({
     }
   }
   const canShowMenu = menuItems.length > 0;
-  const showArrow   = (hovered || menuOpen) && canShowMenu;
+  const showArrow = (hovered || menuOpen) && canShowMenu;
 
   return (
     <div
@@ -355,7 +355,7 @@ const MessageBubble = ({
         ) : (
           <>
             {isAudio && <AudioContent message={message} />}
-            {isFile  && <FileContent  message={message} />}
+            {isFile && <FileContent message={message} />}
             {message.type === "call" && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0", minWidth: 160 }}>
                 <div style={{

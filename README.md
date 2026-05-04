@@ -29,7 +29,9 @@ cd whatsapp_web
 ```bash
 cd backend
 npm install
-npm run dev
+npm run dev    # For development (with nodemon)
+# OR
+node server.js # To run directly
 ```
 
 Backend runs by default on `http://localhost:5000`.

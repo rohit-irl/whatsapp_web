@@ -111,7 +111,7 @@ const configureSocket = (io) => {
           console.error(">>> [SOCKET] FAILED: Missing IDs");
           return;
         }
-        
+
         console.log(">>> [SOCKET] Attempting to create Call document...");
         const newCall = new Call({
           caller: String(callerId),
@@ -119,21 +119,21 @@ const configureSocket = (io) => {
           type: type || "voice",
           status: "missed",
         });
-        
+
         console.log(">>> [SOCKET] Attempting to save Call document...");
         const savedCall = await newCall.save();
         console.log(">>> [SOCKET] SUCCESS: Call saved with ID:", savedCall._id);
-        
+
         socket.data.activeCallId = savedCall._id;
         socket.emit("call_initiated", { callId: savedCall._id });
-        
+
         console.log(">>> [SOCKET] Emitting incoming_call to receiver:", receiverId);
-        io.to(String(receiverId)).emit("incoming_call", { 
-          callerId, 
-          callerName, 
-          callerAvatar, 
+        io.to(String(receiverId)).emit("incoming_call", {
+          callerId,
+          callerName,
+          callerAvatar,
           type,
-          callId: savedCall._id 
+          callId: savedCall._id
         });
       } catch (err) {
         console.error(">>> [SOCKET] CRITICAL SAVE ERROR:", err.message);

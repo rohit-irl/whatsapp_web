@@ -29,7 +29,7 @@ const CallIcon = ({ type, status }) => {
   );
 };
 
-const CallsPanel = ({ currentUser, activePanel }) => {
+const CallsPanel = ({ currentUser, activePanel, onStartNewCall }) => {
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -105,16 +105,66 @@ const CallsPanel = ({ currentUser, activePanel }) => {
             alignItems: "center", 
             justifyContent: "center", 
             height: "100%", 
-            padding: 32,
+            padding: 40,
             textAlign: "center"
           }}>
-            <div style={{ fontSize: 64, marginBottom: 16, opacity: 0.3 }}>📞</div>
-            <h3 style={{ color: "var(--text-primary)", margin: "0 0 8px" }}>No calls yet</h3>
-            <p style={{ color: "var(--text-secondary)", fontSize: 14, margin: 0, lineHeight: 1.5 }}>
-              Recent calls will appear here. Click on a contact to start a call.
+            <div style={{ 
+              width: 180, 
+              height: 180, 
+              marginBottom: 24, 
+              borderRadius: "50%",
+              background: "rgba(0, 168, 132, 0.05)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden"
+            }}>
+              <img 
+                src="/no-calls.png" 
+                alt="No calls" 
+                style={{ 
+                  width: "120%", 
+                  height: "120%", 
+                  objectFit: "contain",
+                  opacity: 0.8
+                }} 
+              />
+            </div>
+            <h3 style={{ 
+              color: "var(--text-primary)", 
+              margin: "0 0 12px",
+              fontSize: 20,
+              fontWeight: 500
+            }}>
+              No calls yet
+            </h3>
+            <p style={{ 
+              color: "var(--text-secondary)", 
+              fontSize: 14, 
+              margin: "0 0 32px", 
+              lineHeight: 1.6,
+              maxWidth: 280
+            }}>
+              Recent calls will appear here. You can start a new call from your chats.
             </p>
+            <div style={{
+              padding: "10px 24px",
+              borderRadius: 24,
+              background: "var(--accent)",
+              color: "#fff",
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+              transition: "transform 0.2s, background 0.2s"
+            }}
+            className="start-call-btn"
+            onClick={onStartNewCall}
+            >
+              Start a new call
+            </div>
           </div>
-        ) : (
+) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {calls.map((call) => {
               const isCaller = String(call.caller?._id || call.caller) === String(currentUser?._id);
@@ -199,6 +249,13 @@ const CallsPanel = ({ currentUser, activePanel }) => {
       <style>{`
         .call-item:hover {
           background: var(--bg-sidebar-hover);
+        }
+        .start-call-btn:hover {
+          background: #019d7d;
+          transform: scale(1.05);
+        }
+        .start-call-btn:active {
+          transform: scale(0.98);
         }
       `}</style>
     </div>

@@ -10,6 +10,7 @@ import CommunitiesPanel from "../components/panels/CommunitiesPanel";
 
 
 import StatusPanel from "../components/panels/StatusPanel";
+import ContactsPanel from "../components/panels/ContactsPanel";
 import SettingsPanel from "../components/settings/SettingsPanel";
 import CallModal from "../components/CallModal";
 import useSocket from "../hooks/useSocket";
@@ -440,20 +441,20 @@ const Chat = () => {
     }
   };
 
-  const handleStartCall = (type) => {
-    if (!selectedUser || !currentUser || !socket) {
-      console.error(">>> [FRONTEND] Cannot start call: missing data", { selectedUser, currentUser, socket: !!socket });
+  const handleStartCall = (type, targetUser = selectedUser) => {
+    if (!targetUser || !currentUser || !socket) {
+      console.error(">>> [FRONTEND] Cannot start call: missing data", { targetUser, currentUser, socket: !!socket });
       return;
     }
     const payload = {
       callerId: currentUser._id,
       callerName: currentUser.username,
       callerAvatar: currentUser.avatar,
-      receiverId: selectedUser._id,
+      receiverId: targetUser._id,
       type
     };
     console.log(">>> [FRONTEND] Emitting call_user", payload);
-    setCall({ status: "calling", username: selectedUser.username, avatar: selectedUser.avatar, type, partnerId: selectedUser._id, isCaller: true, callId: null });
+    setCall({ status: "calling", username: targetUser.username, avatar: targetUser.avatar, type, partnerId: targetUser._id, isCaller: true, callId: null });
     socket.emit("call_user", payload);
   };
 
@@ -481,7 +482,24 @@ const Chat = () => {
   const renderLeftPanel = () => {
     switch (activePanel) {
       case "calls":
-        return <CallsPanel currentUser={currentUser} activePanel={activePanel} />;
+        return (
+          <CallsPanel 
+            currentUser={currentUser} 
+            activePanel={activePanel} 
+            onStartNewCall={() => setActivePanel("contacts")} 
+          />
+        );
+      case "contacts":
+        return (
+          <ContactsPanel 
+            currentUser={currentUser} 
+            onCall={(type, user) => {
+              handleStartCall(type, user);
+              // Optional: switch back to calls after starting? Or stay?
+            }} 
+            onBack={() => setActivePanel("calls")}
+          />
+        );
       case "communities":
         return (
           <CommunitiesPanel

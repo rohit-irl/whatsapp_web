@@ -19,18 +19,62 @@ const HangupIcon = () => (
   </svg>
 );
 
+const RING_TONE = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
+const DIAL_TONE = "https://assets.mixkit.co/active_storage/sfx/1358/1358-preview.mp3";
+
 const CallModal = ({ callData, onAccept, onReject, onEnd }) => {
   const [timer, setTimer] = useState(0);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const timerRef = useRef(null);
+  const audioRef = useRef(null);
+
+  const playAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.play()
+        .then(() => {
+          console.log(">>> [CallModal] Audio playing successfully");
+          setAudioBlocked(false);
+        })
+        .catch(err => {
+          console.warn(">>> [CallModal] Audio play blocked:", err.message);
+          setAudioBlocked(true);
+        });
+    }
+  };
 
   useEffect(() => {
+    console.log(">>> [CallModal] Status changed:", callData.status);
+    
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+
+    if (callData.status === "incoming" || callData.status === "calling") {
+      const url = callData.status === "incoming" ? RING_TONE : DIAL_TONE;
+      const audio = new Audio(url);
+      audio.loop = true;
+      audio.crossOrigin = "anonymous";
+      audioRef.current = audio;
+      playAudio();
+    }
+// ... (rest of the useEffect remains same)
+
     if (callData.status === "active") {
       timerRef.current = setInterval(() => setTimer((s) => s + 1), 1000);
     } else {
       clearInterval(timerRef.current);
       setTimer(0);
     }
-    return () => clearInterval(timerRef.current);
+
+    return () => {
+      clearInterval(timerRef.current);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, [callData.status]);
 
   const fmtTime = (s) => {
@@ -129,11 +173,24 @@ const CallModal = ({ callData, onAccept, onReject, onEnd }) => {
       </div>
 
       {(isCalling || isIncoming) && (
-        <div style={{ marginTop: 40 }}>
-          <div className="call-pulse" style={{
-            width: 10, height: 10, borderRadius: "50%", background: "var(--accent)",
-            animation: "pulse 1.5s infinite"
-          }} />
+        <div style={{ marginTop: 40, textAlign: "center" }}>
+          {audioBlocked ? (
+            <button 
+              onClick={playAudio}
+              style={{
+                background: "var(--accent)", color: "#fff", border: "none",
+                padding: "8px 16px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+              }}
+            >
+              🔈 Tap to enable sound
+            </button>
+          ) : (
+            <div className="call-pulse" style={{
+              width: 10, height: 10, borderRadius: "50%", background: "var(--accent)",
+              animation: "pulse 1.5s infinite"
+            }} />
+          )}
         </div>
       )}
 
